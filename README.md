@@ -13,6 +13,13 @@ replaced; its code remains recoverable in Git history.
 Only this project's publishable client configuration is included. No old project
 keys, records or device-local task data are imported.
 
+## Hosting migration
+
+Cloudflare Pages Free is the selected replacement host. Follow
+[Cloudflare setup](docs/CLOUDFLARE.md) to connect this repository and daymarks.click.
+The replacement deployment is pending the account connection; this does not
+change the Supabase project or migrate user data.
+
 ## Version 1.0
 
 Installable PWA with home-screen icons, an install guide, offline reconnect page,
