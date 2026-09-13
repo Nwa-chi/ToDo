@@ -17,10 +17,10 @@ keys, records or device-local task data are imported.
 
 Installable PWA with home-screen icons, an install guide, offline reconnect page,
 clear account errors, current-origin email redirects and refined mobile controls.
-See [release notes](docs/RELEASE-1.0.md) and [domain setup](docs/DOMAIN.md).
+See [current access status](docs/PUBLIC-ACCESS.md), [release notes](docs/RELEASE-1.0.md) and [domain setup](docs/DOMAIN.md).
 
-Private app: https://daymark-nwachi-todo.nwachi-9670.chatgpt.site
-Requested domain: nwachi.click (DNS and TLS verification pending).
+Website access: public.
+Selected domain: daymarks.click (registration, DNS and TLS verification pending).
 
 ## Implemented
 
@@ -76,11 +76,9 @@ tested with temporary users inside a transaction that was rolled back.
 
 See [launch setup](docs/SETUP.md). Email templates, SMTP delivery, allowed URLs and
 real email verification still need configuration and end-to-end testing.
-This repository has not been deployed publicly.
+Public website access is enabled; personal plans still require a verified account.
 
-The requested ChatGPT-admin login and admin portal are not part of this rebuild
-yet. They require a supported identity integration and an explicit server-side
-owner identity; no public signup can make itself an administrator.
+User administration is not implemented. No public signup can make itself an administrator.
 
 ## Structure
 

@@ -53,17 +53,15 @@ References:
 - Test a real user on two devices, password reset, expired/wrong codes, failure
   states and sign-out before launch.
 
-## Admin portal
+## Administration
 
-The desired owner flow is Sign in with ChatGPT. Do not collect the owner's
-ChatGPT password in Daymark. The supported hosting identity integration and
-server-side owner allowlist must be configured before an admin portal is enabled.
-No admin credentials, default password or automatic first-user promotion exists.
+User administration is not part of version 1.0. No default admin credentials or
+automatic first-user promotion exists. Individual accounts use verified email.
 
 ## Hosting
 
-Deploy only with the owner's intended visibility. Keep previews private unless
-public visibility is explicitly authorised. Use HTTPS and preserve the server's
+The owner has explicitly authorised public website access. Personal plans remain
+protected by email authentication and per-user database policies. Use HTTPS and preserve the server's
 Content-Security-Policy when placing it behind a reverse proxy. The current CSP
 allows network requests only to the selected Supabase project.
 

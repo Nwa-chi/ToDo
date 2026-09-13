@@ -37,12 +37,18 @@ external launch gates below have passed.
    Password for the exact sender account in Supabase, then test real signup,
    resend, code verification, login and password recovery. Do not enter the normal
    Gmail password. Never store the app password in this repository.
-2. nwachi.click is attached to the Site but DNS/TLS validation is pending. Follow
+2. daymarks.click is attached to the Site but DNS/TLS validation is pending. Follow
    DOMAIN.md and configure the Supabase Site URL/redirect allowlist.
-3. Hosting remains owner-private. Public sharing is a separate owner decision.
-4. The previously requested ChatGPT-admin portal is not implemented. Version 1.0
-   is an individual planner; do not advertise user administration or ChatGPT SSO
-   within the planner. The host access gate is not an admin role.
+3. Hosting is public by the owner's request. Account data remains restricted.
+4. User administration is not implemented; version 1.0 is an individual planner.
 5. Background push notifications and offline task editing are not implemented.
+
+## Usability update
+
+- Visible filter labels and a one-click filter reset.
+- Quick Today, Tomorrow and Clear date controls in the editor.
+- Clear sign-in progress feedback, verification guidance and accessible errors.
+- Removed obsolete domain and identity-provider references from app documentation.
+- Removed the two earlier custom-domain attachments; daymarks.click is the target.
 
 All work belongs to Nwa-chi/ToDo. No other application is a fallback backend.

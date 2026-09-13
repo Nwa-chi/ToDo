@@ -12,13 +12,13 @@ document.documentElement.dataset.theme=preference('daymark-theme',matchMedia('(p
 $('#theme').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('daymark-theme',theme)}catch{}};
 function toast(message,undo=false){clearTimeout(toastTimer);$('#toast-text').textContent=message;$('#undo').hidden=!undo;$('#toast').hidden=false;toastTimer=setTimeout(()=>{$('#toast').hidden=true;state.undo=null},8000)}
 function authMode(mode) {
-  state.mode=mode;$('#auth-error').textContent='';
+  state.mode=mode;$('#auth-error').textContent='';$('#auth-step').hidden=!['register','verify'].includes(mode);$('#auth-step').textContent=mode==='verify'?'Step 2 of 2 · Verify your email':'Step 1 of 2 · Create your account';
   const verifying=['verify','recoveryverify'].includes(mode),updating=mode==='update';
   $('#auth-title').textContent=({login:'Sign in',register:'Create your account',verify:'Check your email',recover:'Reset your password',recoveryverify:'Enter your reset code',update:'Choose a new password'})[mode];
   $('#password-help').hidden=!['register','update'].includes(mode);
   $('#verify-existing').hidden=!['login','register'].includes(mode);
   $('#password').type='password';$('#show-password').textContent='Show';$('#show-password').setAttribute('aria-pressed','false');
-  $('#auth-hint').textContent=verifying?'Enter the code from your email.':mode==='register'?'Create an account, then verify your email.':mode==='recover'?'We’ll email a code if this address has an account.':updating?'Use a unique password of at least eight characters.':'Your plans are waiting for you.';
+  $('#auth-hint').textContent=verifying?'Enter your email code below. Check your spam folder if you don’t see it.':mode==='register'?'Create an account, then verify your email.':mode==='recover'?'We’ll email a code if this address has an account.':updating?'Use a unique password of at least eight characters.':'Your plans are waiting for you.';
   const showPassword=['login','register','update'].includes(mode);
   $('#password-field').hidden=!showPassword;$('#password').required=showPassword;
   $('#password').autocomplete=mode==='login'?'current-password':'new-password';
@@ -56,7 +56,7 @@ $('#show-password').onclick=()=>{const show=$('#password').type==='password';$('
 $('#auth-form').onsubmit=async e=>{
   e.preventDefault();if(authBusy)return;
   if(!navigator.onLine){$('#auth-error').textContent='You’re offline. Connect to the internet and try again.';return;}
-  authBusy=true;$('#auth-submit').disabled=true;$('#auth-error').textContent='';
+  authBusy=true;$('#auth-submit').disabled=true;$('#auth-form').setAttribute('aria-busy','true');const submitLabel=$('#auth-submit').textContent;$('#auth-submit').textContent='Please wait…';$('#auth-error').textContent='';
   const email=$('#email').value.trim(),password=$('#password').value,token=$('#code').value.trim();
   try{
     let result;
@@ -86,7 +86,7 @@ $('#auth-form').onsubmit=async e=>{
       $('#password').value='';authMode('login');await establishSession();toast('Password updated.');
     }
   }catch(error){$('#auth-error').textContent=authErrorMessage(error)}
-  finally{authBusy=false;$('#auth-submit').disabled=false}
+  finally{authBusy=false;$('#auth-submit').disabled=false;$('#auth-form').setAttribute('aria-busy','false');if($('#auth-submit').textContent==='Please wait…')$('#auth-submit').textContent=submitLabel}
 };
 $('#resend').onclick=async()=>{
   if(authBusy)return;
@@ -108,7 +108,7 @@ function dateLabel(t){
   return t.due_date?new Intl.DateTimeFormat('en-GB',{dateStyle:'medium'}).format(new Date(t.due_date+'T12:00:00')):'No date';
 }
 function render(){
-  const items=filterItems(state.items,filters());
+  const currentFilters=filters();const items=filterItems(state.items,currentFilters);$('#reset-filters').hidden=!currentFilters.search&&currentFilters.kind==='all'&&currentFilters.priority==='all'&&currentFilters.category==='all';
   $('#result-count').textContent=String(items.length);
   $('#items').innerHTML=items.map(t=>`<article class="item ${t.completed?'complete':''} ${overdue(t)?'overdue':''}" data-id="${t.id}">
     <input type="checkbox" data-complete ${t.completed?'checked':''} aria-label="${escape((t.completed?'Reopen ':'Complete ')+t.title)}">
@@ -232,3 +232,6 @@ function connectionStatus(){document.querySelector('#connection').hidden=navigat
 addEventListener('online',connectionStatus);addEventListener('offline',connectionStatus);connectionStatus();
 for(const b of document.querySelectorAll('[data-about]'))b.onclick=()=>$('#about-dialog').showModal();
 for(const b of document.querySelectorAll('[data-close-dialog]'))b.onclick=()=>b.closest('dialog').close();
+
+$('#reset-filters').onclick=()=>{$('#search').value='';for(const id of ['kind-filter','priority-filter','category-filter'])$('#'+id).value='all';render();$('#search').focus()};
+for(const button of document.querySelectorAll('[data-date]'))button.onclick=()=>{const choice=button.dataset.date;if(choice==='clear'){$('#due-date').value='';$('#due-time').value='';return;}const date=new Date();if(choice==='tomorrow')date.setDate(date.getDate()+1);$('#due-date').value=localDate(date)};

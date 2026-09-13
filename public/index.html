@@ -26,11 +26,11 @@
       <div class="auth-box">
         <p class="eyebrow">WELCOME TO DAYMARK</p>
         <h2 id="auth-title">Sign in</h2>
-        <p class="muted" id="auth-hint">Your plans are waiting for you.</p>
+        <p id="auth-step" class="step-label" hidden>Step 1 of 2 · Create your account</p><p class="muted" id="auth-hint">Your plans are waiting for you.</p>
         <form id="auth-form">
-          <label id="email-field">Email address<input id="email" type="email" autocomplete="email" maxlength="254" required></label>
-          <label id="password-field">Password<span class="password-control"><input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128"><button type="button" id="show-password" aria-label="Show password" aria-pressed="false">Show</button></span><small id="password-help" class="fine" hidden>Use at least 8 characters. Choose a password just for Daymark.</small></label>
-          <label id="code-field" hidden>Verification code<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10"></label>
+          <label id="email-field">Email address<input id="email" aria-describedby="auth-error" type="email" autocomplete="email" maxlength="254" required></label>
+          <label id="password-field">Password<span class="password-control"><input id="password" aria-describedby="password-help auth-error" type="password" autocomplete="current-password" required minlength="8" maxlength="128"><button type="button" id="show-password" aria-label="Show password" aria-pressed="false">Show</button></span><small id="password-help" class="fine" hidden>Use at least 8 characters. Choose a password just for Daymark.</small></label>
+          <label id="code-field" hidden>Verification code<input id="code" aria-describedby="auth-hint auth-error" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10"></label>
           <p id="auth-error" class="error" role="alert"></p>
           <button class="primary full" id="auth-submit">Sign in</button>
         </form>
@@ -57,13 +57,13 @@
         <header class="page-header"><div><p id="today-label" class="muted"></p><h1 id="view-title">All plans</h1></div><button id="add" class="primary">+ Add a plan</button></header>
         <section class="summary" aria-label="Progress"><div><p class="eyebrow">ONE STEP AT A TIME</p><h2 id="progress-title">A fresh start</h2><p id="progress-copy">Add your first plan.</p></div><div class="progress-box"><strong id="progress-label">0%</strong><progress id="progress" max="100" value="0">0%</progress></div></section>
         <section class="controls" aria-label="Filter plans">
-          <label class="search-label"><span class="sr-only">Search plans</span><input id="search" type="search" placeholder="Search your plans…"></label>
-          <label><span class="sr-only">Filter by type</span><select id="kind-filter"><option value="all">Every type</option value="task">Tasks</option value="event">Events</option value="occasion">Occasions</option></select></label>
-          <label><span class="sr-only">Filter by priority</span><select id="priority-filter"><option value="all">All priorities</option value="high">High</option value="medium">Medium</option value="low">Low</option></select></label>
-          <label><span class="sr-only">Filter by category</span><select id="category-filter"><option value="all">All categories</option></select></label>
-          <label><span class="sr-only">Sort plans</span><select id="sort"><option value="due">Due date</option><option value="priority">Priority</option><option value="created">Newest first</option><option value="alpha">A–Z</option></select></label>
+          <label class="search-label"><span>Search</span><input id="search" type="search" placeholder="Search your plans…"></label>
+          <label><span>Type</span><select id="kind-filter"><option value="all">Every type</option value="task">Tasks</option value="event">Events</option value="occasion">Occasions</option></select></label>
+          <label><span>Priority</span><select id="priority-filter"><option value="all">All priorities</option value="high">High</option value="medium">Medium</option value="low">Low</option></select></label>
+          <label><span>Category</span><select id="category-filter"><option value="all">All categories</option></select></label>
+          <label><span>Sort by</span><select id="sort"><option value="due">Due date</option><option value="priority">Priority</option><option value="created">Newest first</option><option value="alpha">A–Z</option></select></label>
         </section>
-        <div class="list-heading"><h2>Your plans <span id="result-count" class="muted"></span></h2><span id="sync-status" class="fine" role="status"></span><button id="refresh" class="link">Refresh</button></div>
+        <button id="reset-filters" class="link" hidden>Clear filters</button><div class="list-heading"><h2>Your plans <span id="result-count" class="muted"></span></h2><span id="sync-status" class="fine" role="status"></span><button id="refresh" class="link">Refresh</button></div>
         <p id="load-error" role="alert" class="error" hidden></p>
         <p id="loading" role="status" hidden>Loading your plans…</p>
         <div id="items"></div>
@@ -80,7 +80,7 @@
       <label>Description <span class="muted">Optional</span><textarea id="description" maxlength="500" rows="3"></textarea></label>
       <div class="form-row"><label>Type<select id="kind"><option value="task">Task</option><option value="event">Event</option><option value="occasion">Occasion</option></select></label><label>Priority<select id="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label></div>
       <div class="form-row"><label>Date<input id="due-date" type="date"></label><label>Time <span class="muted">Optional</span><input id="due-time" type="time"></label></div>
-      <p id="timezone" class="fine"></p>
+      <div class="quick-dates" aria-label="Quick date selection"><button type="button" class="secondary" data-date="today">Today</button><button type="button" class="secondary" data-date="tomorrow">Tomorrow</button><button type="button" class="link" data-date="clear">Clear date</button></div><p id="timezone" class="fine"></p>
       <div class="form-row"><label>Category<input id="category" maxlength="30" list="categories" placeholder="Personal, work…"><datalist id="categories"></datalist></label><label>Duration in minutes<input id="duration" type="number" min="1" max="10080" placeholder="Optional"></label></div>
       <p id="item-error" class="error" role="alert"></p>
       <div class="dialog-actions"><button type="button" id="cancel-editor" class="secondary">Cancel</button><button class="primary" id="save">Save plan</button></div>

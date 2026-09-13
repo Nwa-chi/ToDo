@@ -19,3 +19,7 @@ dialog{border:1px solid var(--line);border-radius:18px;padding:28px;max-height:9
 @media(min-width:801px){.sidebar-bottom .app-links{gap:12px}.auth-story{padding-top:40px;padding-bottom:24px}}
 @media(max-width:800px){.story-benefits{display:none}.sidebar-bottom{flex-wrap:wrap}.sidebar-bottom .app-links{flex-basis:100%;justify-content:flex-start;gap:20px;border-top:1px solid var(--line);padding-top:5px}.app-links .version{margin-left:auto}.auth-box{width:min(100%,480px)}.auth-story h1{max-width:none}.content{padding-bottom:calc(24px + env(safe-area-inset-bottom))}#sync-status{margin-right:12px;font-size:.75rem}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,box-shadow .15s}.item{animation:arrive .2s ease-out}@keyframes arrive{from{opacity:.5;transform:translateY(3px)}to{opacity:1;transform:none}}}
+
+/* Clear labels and fewer steps for everyday planning. */
+.controls label>span{display:block;font-size:.75rem;color:var(--muted);margin:0 0 7px}.quick-dates{display:flex;gap:10px;flex-wrap:wrap}.quick-dates .secondary{padding:7px 14px;min-height:44px}.step-label{color:var(--accent);font-size:.8rem;font-weight:650;margin:16px 0 8px}#reset-filters{margin:-16px 0 12px}.controls{align-items:end}.auth-box #auth-step+.muted{line-height:1.6}
+@media(max-width:800px){.controls .search-label{flex-basis:100%}.controls label{flex-basis:calc(50% - 10px);min-width:0}.auth-box .auth-links{flex-wrap:wrap;gap:8px 20px}.auth-box .app-links{gap:14px}.auth-box .app-links .version{margin-left:0}}
