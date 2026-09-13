@@ -10,8 +10,7 @@ priorities, categories, due dates, filtering, sorting, progress and theme prefer
 Browser notification support is opt-in and requires a compatible browser and an
 open app. Notifications are not background push notifications.
 
-The first launch inserts three sample tasks. These are demonstration records,
-not real user data; the current interface does not yet label them as samples.
+New installations start with an empty list. Existing browser data is preserved.
 
 A separate Daymark ToDo Supabase project has been provisioned. Its private-record
 schema is saved in this repository. The browser app is **not yet connected** to
@@ -20,14 +19,25 @@ portal are **not yet implemented**.
 
 ## Run
 
-Requires Python 3 to serve the app; Node.js is needed for the source checks.
+Requires Node.js 22 or newer. There are no runtime npm dependencies.
 
 ```sh
+npm run build
 npm start
 ```
 
-Open http://localhost:4173 on the same computer. This is a local server, not a
-public deployment. Do not use the Python development server as a production host.
+Open http://localhost:4173 on the same computer. The server serves only built public
+assets, with security headers and a /healthz endpoint. Use an HTTPS reverse proxy
+in production. A local server address is not a public deployment.
+
+Container option:
+
+```sh
+docker build -t daymark-todo .
+docker run --rm -p 4173:4173 daymark-todo
+```
+
+The Docker configuration is provided but has not been container-tested here.
 
 ## Check
 
@@ -36,9 +46,10 @@ node --check app.js
 npm test
 ```
 
-The test command checks source structure only. It does not execute the app in a
-browser or prove that accessibility, notifications, authentication or email
-delivery work. Real browser flow tests are still required before release.
+The test command starts the actual server and checks built assets, security
+headers, allowed methods, health and blocked private paths. npm run check:source
+provides additional lightweight source checks. Neither replaces browser-flow,
+accessibility, notification or real email-delivery tests.
 
 ## Structure
 
@@ -46,8 +57,18 @@ delivery work. Real browser flow tests are still required before release.
 - `styles.css`: responsive styling, themes and focus treatment.
 - `app.js`: current device-local task state and notifications.
 - `tests.js`: lightweight source checks.
+- `release.test.cjs`: actual HTTP release checks.
+- `build.cjs` and `server.cjs`: static build and allowlisted HTTP server.
+- `Dockerfile`: non-root container configuration.
 - `supabase/migrations/`: exact migration already applied to Daymark's database.
 - `docs/SETUP.md`: project separation, email setup and outstanding work.
+
+## Launch status
+
+This release prepares deployment of the device-local application only. It is
+not ready for the requested multi-user launch. See docs/SETUP.md for authentication,
+OTP, cloud sync, administrator identity, SMTP and hosting work still required.
+No public deployment or organisation transfer is included in this change.
 
 ## Security
 

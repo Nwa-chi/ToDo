@@ -7,10 +7,9 @@
 - Supabase reference: evctsfrxefzzqedeqslg
 - Region: eu-central-1 (Frankfurt)
 
-Daymark has its own database and authentication project. It shares the AURA MUSIC
-HUB Supabase organisation, which is an administrative/billing grouping. It does not
-use Aura Music Hub's database, authentication users, keys or repository. Moving to
-a separate organisation has not been requested with a destination or performed.
+Daymark has its own repository, database and authentication project. Organisational
+and billing isolation still requires transferring this project to a dedicated
+organisation selected by the owner. No organisation transfer has been performed.
 
 All further Daymark source, migration history and setup changes should be committed
 to this repository. Exclude secrets, personal records and temporary exports.
