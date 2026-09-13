@@ -15,3 +15,9 @@ test('never serves source, secrets, database files or unsupported writes',async(
  assert.match(page.headers.get('content-security-policy'),/script-src 'self'/);
  assert.equal(page.headers.get('x-content-type-options'),'nosniff');
 });
+test('PWA endpoints return usable MIME types and no cached service worker',async()=>{
+ for(const [file,type] of [['/manifest.webmanifest','application/manifest+json'],['/sw.js','text/javascript'],['/offline.html','text/html'],['/icons/icon-192.png','image/png']]){
+  const r=await fetch(base+file);assert.equal(r.status,200);assert.ok(r.headers.get('content-type').startsWith(type));
+ }
+ assert.equal((await fetch(base+'/sw.js')).headers.get('cache-control'),'no-store');
+});

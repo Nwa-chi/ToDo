@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { SUPABASE_URL } from './src/config.js';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-const files = new Map([['/','index.html'],['/index.html','index.html'],['/app.js','app.js'],['/styles.css','styles.css'],['/favicon.svg','favicon.svg']]);
-const types = {'html':'text/html','js':'text/javascript','css':'text/css','svg':'image/svg+xml'};
+const files = new Map([['/','index.html'],['/index.html','index.html'],['/app.js','app.js'],['/styles.css','styles.css'],['/favicon.svg','favicon.svg'],...['sw.js','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'].map(f=>['/'+f,f])]);
+const types = {'html':'text/html','js':'text/javascript','css':'text/css','svg':'image/svg+xml','png':'image/png','webmanifest':'application/manifest+json'};
 export function createServer() {
   return http.createServer(async (req,res) => {
     res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${SUPABASE_URL}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);

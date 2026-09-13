@@ -1,3 +1,5 @@
+import {setupInstall} from './pwa.js';
+import {authErrorMessage} from './auth-errors.js';
 import {client,listPlans,savePlan,deletePlans} from './api.js';
 import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan} from './domain.js';
 const $=s=>document.querySelector(s);
@@ -13,6 +15,9 @@ function authMode(mode) {
   state.mode=mode;$('#auth-error').textContent='';
   const verifying=['verify','recoveryverify'].includes(mode),updating=mode==='update';
   $('#auth-title').textContent=({login:'Sign in',register:'Create your account',verify:'Check your email',recover:'Reset your password',recoveryverify:'Enter your reset code',update:'Choose a new password'})[mode];
+  $('#password-help').hidden=!['register','update'].includes(mode);
+  $('#verify-existing').hidden=!['login','register'].includes(mode);
+  $('#password').type='password';$('#show-password').textContent='Show';$('#show-password').setAttribute('aria-pressed','false');
   $('#auth-hint').textContent=verifying?'Enter the code from your email.':mode==='register'?'Create an account, then verify your email.':mode==='recover'?'We’ll email a code if this address has an account.':updating?'Use a unique password of at least eight characters.':'Your plans are waiting for you.';
   const showPassword=['login','register','update'].includes(mode);
   $('#password-field').hidden=!showPassword;$('#password').required=showPassword;
@@ -26,7 +31,7 @@ function authMode(mode) {
 function clearWorkspace(){
   state.epoch++;refreshSequence++;state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   $('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
-  $('#items').replaceChildren();$('#account-email').textContent='';$('#alerts').textContent='Enable alerts';
+  $('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
 async function establishSession(){
   const epoch=state.epoch;
@@ -45,15 +50,18 @@ client.auth.onAuthStateChange((event)=>{
   else if(['SIGNED_IN','INITIAL_SESSION'].includes(event))setTimeout(()=>establishSession().catch(e=>toast(e.message)),0);
 });
 $('#switch-auth').onclick=()=>{if(!authBusy)authMode(state.mode==='login'?'register':'login')};
-$('#forgot').onclick=()=>authMode('recover');
+$('#forgot').onclick=()=>{if(!authBusy)authMode('recover')};
+$('#verify-existing').onclick=()=>{if(!authBusy)authMode('verify')};
+$('#show-password').onclick=()=>{const show=$('#password').type==='password';$('#password').type=show?'text':'password';$('#show-password').textContent=show?'Hide':'Show';$('#show-password').setAttribute('aria-label',show?'Hide password':'Show password');$('#show-password').setAttribute('aria-pressed',String(show))};
 $('#auth-form').onsubmit=async e=>{
   e.preventDefault();if(authBusy)return;
+  if(!navigator.onLine){$('#auth-error').textContent='You’re offline. Connect to the internet and try again.';return;}
   authBusy=true;$('#auth-submit').disabled=true;$('#auth-error').textContent='';
   const email=$('#email').value.trim(),password=$('#password').value,token=$('#code').value.trim();
   try{
     let result;
     if(state.mode==='register'){
-      result=await client.auth.signUp({email,password});
+      result=await client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/'}});
       if(result.error)throw result.error;
       $('#password').value='';
       // Confirmation must remain required; never open the workspace on registration.
@@ -61,13 +69,13 @@ $('#auth-form').onsubmit=async e=>{
       authMode('verify');resendUntil=Date.now()+60000;
       toast('Check your email for a verification code. Delivery depends on the email service.');
     } else if(state.mode==='login'){
-      result=await client.auth.signInWithPassword({email,password});if(result.error)throw result.error;
+      result=await client.auth.signInWithPassword({email,password});if(result.error){if(result.error.code==='email_not_confirmed')authMode('verify');throw result.error;}
       $('#password').value='';await establishSession();
     } else if(state.mode==='verify'){
       result=await client.auth.verifyOtp({email,token,type:'email'});if(result.error)throw result.error;
       authMode('login');await establishSession();
     } else if(state.mode==='recover'){
-      result=await client.auth.resetPasswordForEmail(email);if(result.error)throw result.error;
+      result=await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/'});if(result.error)throw result.error;
       authMode('recoveryverify');resendUntil=Date.now()+60000;
       toast('If the address has an account, a reset email has been requested.');
     } else if(state.mode==='recoveryverify'){
@@ -77,7 +85,7 @@ $('#auth-form').onsubmit=async e=>{
       result=await client.auth.updateUser({password});if(result.error)throw result.error;
       $('#password').value='';authMode('login');await establishSession();toast('Password updated.');
     }
-  }catch(error){$('#auth-error').textContent=error.message||'Unable to complete this request. Please try again.'}
+  }catch(error){$('#auth-error').textContent=authErrorMessage(error)}
   finally{authBusy=false;$('#auth-submit').disabled=false}
 };
 $('#resend').onclick=async()=>{
@@ -88,9 +96,9 @@ $('#resend').onclick=async()=>{
   try{
     const email=$('#email').value.trim();
     if(!$('#email').reportValidity())return;
-    const {error}=state.mode==='recoveryverify'?await client.auth.resetPasswordForEmail(email):await client.auth.resend({type:'signup',email});
+    const {error}=state.mode==='recoveryverify'?await client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/'}):await client.auth.resend({type:'signup',email});
     if(error)throw error;resendUntil=Date.now()+60000;toast('Another code has been requested.');
-  }catch(e){$('#auth-error').textContent=e.message}
+  }catch(e){$('#auth-error').textContent=authErrorMessage(e)}
   finally{authBusy=false;$('#resend').disabled=false}
 };
 $('#logout').onclick=async()=>{if(state.busy)return;$('#logout').disabled=true;try{const {error}=await client.auth.signOut();if(error)throw error;clearWorkspace();authMode('login')}catch(e){toast(e.message)}finally{$('#logout').disabled=false}};
@@ -107,6 +115,7 @@ function render(){
     <div><div class="item-title">${escape(t.title)}</div>${t.description?`<p class="item-desc">${escape(t.description)}</p>`:''}
     <div class="meta"><span class="chip">${escape(t.kind)}</span><span class="chip ${t.priority==='high'?'high':''}">${escape(t.priority)} priority</span><span class="chip">${escape(t.category)}</span><span class="chip ${overdue(t)?'high':''}">${overdue(t)?'Overdue · ':''}${escape(dateLabel(t))}</span>${t.duration_minutes?`<span class="chip">${t.duration_minutes} min</span>`:''}</div></div>
     <div class="item-actions"><button data-edit class="link" aria-label="Edit ${escape(t.title)}">Edit</button><button data-delete class="link danger" aria-label="Delete ${escape(t.title)}">Delete</button></div></article>`).join('');
+  $('#empty-action').textContent=state.items.length?'Reset filters':'Add your first plan';
   $('#empty').hidden=items.length>0;$('#empty-title').textContent=state.items.length?'No matching plans':'A little space to begin';$('#empty-copy').textContent=state.items.length?'Try another filter or search.':'Add a task, event or occasion to your day.';
   const complete=state.items.filter(t=>t.completed).length,total=state.items.length,percent=total?Math.round(complete/total*100):0;
   $('#progress-label').textContent=percent+'%';$('#progress').value=percent;
@@ -125,9 +134,10 @@ function categories(){
 async function refresh(){
   if(!state.user||state.busy)return;
   const epoch=state.epoch,sequence=++refreshSequence;
+  $('#sync-status').textContent='Syncing…';
   $('#loading').hidden=false;$('#empty').hidden=true;$('#load-error').hidden=true;
-  try{const items=await listPlans();if(epoch!==state.epoch||sequence!==refreshSequence)return;state.items=items;categories();render()}
-  catch(e){if(epoch===state.epoch){$('#load-error').textContent='Could not load your plans: '+e.message;$('#load-error').hidden=false}}
+  try{const items=await listPlans();if(epoch!==state.epoch||sequence!==refreshSequence)return;state.items=items;categories();render();$('#sync-status').textContent='Up to date'}
+  catch(e){if(epoch===state.epoch){$('#sync-status').textContent='Sync unavailable';$('#load-error').textContent=navigator.onLine?'Could not load your plans. Please try Refresh.':'You’re offline. Reconnect to load your plans.';$('#load-error').hidden=false}}
   finally{if(epoch===state.epoch&&sequence===refreshSequence)$('#loading').hidden=true}
 }
 function lockControls(busy){
@@ -135,6 +145,7 @@ function lockControls(busy){
 }
 async function mutation(fn,success){
   if(state.busy||!state.user)return;
+  if(!navigator.onLine){toast('You’re offline. Reconnect before saving changes.');render();return;}
   state.busy=true;lockControls(true);const epoch=state.epoch;refreshSequence++;
   try{await fn(epoch);if(epoch!==state.epoch)return;categories();render();if(success)toast(success)}
   catch(e){if(epoch===state.epoch){render();$('#item-error').textContent=e.message;toast('Not saved: '+e.message)}}
@@ -149,6 +160,7 @@ function edit(item){
   $('#editor').showModal();$('#item-title').focus();
 }
 $('#add').onclick=()=>edit();
+$('#empty-action').onclick=()=>{if(!state.items.length)return edit();state.view='all';$('#search').value='';for(const id of ['kind-filter','priority-filter','category-filter'])$('#'+id).value='all';document.querySelector('[data-view=all]').click()};
 for(const id of ['close-editor','cancel-editor'])$('#'+id).onclick=()=>{if(!state.busy)$('#editor').close()};
 $('#editor').addEventListener('cancel',e=>{if(state.busy)e.preventDefault()});
 $('#item-form').onsubmit=async e=>{
@@ -199,7 +211,7 @@ $('#alerts').onclick=async()=>{
   try{const permission=await Notification.requestPermission();if(permission!=='granted'){toast('Allow notifications in your browser settings to enable alerts.');return}state.alerts=true;$('#alerts').textContent='Disable alerts';toast('Alerts enabled while the app remains open.');checkAlerts()}
   catch(e){toast('Notifications are unavailable in this browser.')}
 };
-function checkAlerts(){
+async function checkAlerts(){
   if(!state.user||!state.alerts)return;
   const now=Date.now();
   for(const item of state.items){
@@ -207,10 +219,16 @@ function checkAlerts(){
     const at=item.due_at?new Date(item.due_at).getTime():new Date(item.due_date+'T09:00:00').getTime();
     const key=state.user.id+':'+item.id+':'+at;
     if(now<at||now-at>86400000||sentAlerts.has(key)||preference('daymark-alert:'+key,'')==='sent')continue;
-    try{new Notification('Daymark · Due now',{body:item.title,tag:item.id});sentAlerts.add(key);try{localStorage.setItem('daymark-alert:'+key,'sent')}catch{}}
+    try{sentAlerts.add(key);const options={body:item.title,tag:item.id,icon:'/icons/icon-192.png'};const registration=await navigator.serviceWorker?.getRegistration();if(registration)await registration.showNotification('Daymark · Due now',options);else new Notification('Daymark · Due now',options);try{localStorage.setItem('daymark-alert:'+key,'sent')}catch{}}
     catch{state.alerts=false;$('#alerts').textContent='Enable alerts';toast('This browser cannot show scheduled alerts.');return}
   }
 }
 setInterval(()=>{if(state.user){render();checkAlerts()}},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(state.user)refresh();checkAlerts()}});
 authMode('login');
+
+setupInstall(toast);
+function connectionStatus(){document.querySelector('#connection').hidden=navigator.onLine;if(navigator.onLine&&state.user)refresh()}
+addEventListener('online',connectionStatus);addEventListener('offline',connectionStatus);connectionStatus();
+for(const b of document.querySelectorAll('[data-about]'))b.onclick=()=>$('#about-dialog').showModal();
+for(const b of document.querySelectorAll('[data-close-dialog]'))b.onclick=()=>b.closest('dialog').close();

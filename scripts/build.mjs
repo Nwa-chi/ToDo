@@ -1,15 +1,14 @@
+import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
-import { mkdir, copyFile, readdir, unlink } from 'node:fs/promises';
+import { mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 await mkdir(root + 'dist', { recursive: true });
-// Remove only generated files from this app's explicit output directory.
-for (const name of await readdir(root + 'dist')) {
-  if (['index.html','app.js','app.css','styles.css','favicon.svg'].includes(name))
-    await unlink(root + 'dist/' + name);
-}
+await cp(root+'public/',root+'dist/',{recursive:true});
 await build({ absWorkingDir:root, entryPoints:['src/main.js'], outfile:'dist/app.js',
   bundle:true, minify:true, format:'esm', target:['es2022'], sourcemap:false });
-for (const file of ['index.html','styles.css','favicon.svg'])
-  await copyFile(root+'public/'+file, root+'dist/'+file);
-console.log('Daymark build complete.');
+const hash=createHash('sha256');
+for(const name of ['app.js','index.html','styles.css','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'])hash.update(await readFile(root+'dist/'+name));
+const worker=await readFile(root+'public/sw.js','utf8');
+await writeFile(root+'dist/sw.js',worker.replace('__BUILD_ID__',hash.digest('hex').slice(0,16)));
+console.log('Daymark 1.0 build complete.');

@@ -2,21 +2,26 @@
 <html lang="en-GB">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#4f46e5">
   <meta name="description" content="Daymark — a private place for your tasks, events and occasions.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>Daymark · Your day, organised</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to main content</a>
+  <div id="connection" role="status" hidden>You’re offline. Connect to the internet to sign in and save changes.</div>
   <div id="notice" role="status" aria-live="polite" hidden></div>
   <main id="main">
     <section id="auth" class="auth-layout">
       <div class="auth-story"><a class="brand" href="/"><span class="logo">✓</span>Daymark</a>
         <div><p class="eyebrow">A LITTLE CLARITY, EVERY DAY</p><h1>Make room for<br>what matters.</h1><p>Your tasks, plans and important dates.<br>One private place to keep them together.</p></div>
-        <p class="story-foot">Plan your day. Remember the occasion. Take the next step.</p>
+        <div class="story-benefits"><span>✓ A clearer daily plan</span><span>✓ Your important dates, together</span><span>✓ A little progress, every day</span></div><p class="story-foot">Plan your day. Remember the occasion. Take the next step.</p>
       </div>
       <div class="auth-box">
         <p class="eyebrow">WELCOME TO DAYMARK</p>
@@ -24,14 +29,15 @@
         <p class="muted" id="auth-hint">Your plans are waiting for you.</p>
         <form id="auth-form">
           <label id="email-field">Email address<input id="email" type="email" autocomplete="email" maxlength="254" required></label>
-          <label id="password-field">Password<input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128"></label>
+          <label id="password-field">Password<span class="password-control"><input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128"><button type="button" id="show-password" aria-label="Show password" aria-pressed="false">Show</button></span><small id="password-help" class="fine" hidden>Use at least 8 characters. Choose a password just for Daymark.</small></label>
           <label id="code-field" hidden>Verification code<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10"></label>
           <p id="auth-error" class="error" role="alert"></p>
           <button class="primary full" id="auth-submit">Sign in</button>
         </form>
         <div class="auth-links"><button id="switch-auth" class="link">Create an account</button><button id="forgot" class="link">Forgot password?</button></div>
+        <button id="verify-existing" class="link">Already have a verification code?</button>
         <button id="resend" class="link" hidden>Resend code</button>
-        <p class="fine">Your records are private to your verified account.</p>
+        <p class="fine">Your records are private to your verified account.</p><div class="app-links"><button class="link" data-install>Install Daymark</button><button class="link" data-about>About &amp; privacy</button><span class="version">v1.0</span></div>
       </div>
     </section>
     <div id="workspace" class="workspace" hidden>
@@ -45,7 +51,7 @@
           <button data-view="overdue">Overdue <span id="count-overdue">0</span></button>
           <button data-view="completed">Completed <span id="count-completed">0</span></button>
         </nav>
-        <div class="sidebar-bottom"><p id="account-email"></p><button id="theme" class="secondary">Switch theme</button><button id="logout" class="link">Sign out</button></div>
+        <div class="sidebar-bottom"><p id="account-email"></p><button id="theme" class="secondary">Switch theme</button><button id="logout" class="link">Sign out</button><div class="app-links"><button class="link" data-install>Install app</button><button class="link" data-about>About</button><span class="version">v1.0</span></div></div>
       </aside>
       <section class="content">
         <header class="page-header"><div><p id="today-label" class="muted"></p><h1 id="view-title">All plans</h1></div><button id="add" class="primary">+ Add a plan</button></header>
@@ -57,11 +63,11 @@
           <label><span class="sr-only">Filter by category</span><select id="category-filter"><option value="all">All categories</option></select></label>
           <label><span class="sr-only">Sort plans</span><select id="sort"><option value="due">Due date</option><option value="priority">Priority</option><option value="created">Newest first</option><option value="alpha">A–Z</option></select></label>
         </section>
-        <div class="list-heading"><h2>Your plans <span id="result-count" class="muted"></span></h2><button id="refresh" class="link">Refresh</button></div>
+        <div class="list-heading"><h2>Your plans <span id="result-count" class="muted"></span></h2><span id="sync-status" class="fine" role="status"></span><button id="refresh" class="link">Refresh</button></div>
         <p id="load-error" role="alert" class="error" hidden></p>
         <p id="loading" role="status" hidden>Loading your plans…</p>
         <div id="items"></div>
-        <div id="empty" class="empty" hidden><span class="empty-check">✓</span><h2 id="empty-title">A little space to begin</h2><p id="empty-copy" class="muted">Add a task, event or occasion to your day.</p></div>
+        <div id="empty" class="empty" hidden><span class="empty-check" aria-hidden="true">✓</span><h2 id="empty-title">A little space to begin</h2><p id="empty-copy" class="muted">Add a task, event or occasion to your day.</p><button id="empty-action" class="secondary">Add your first plan</button></div>
         <footer class="list-footer"><button id="clear" class="link danger" hidden>Clear completed</button><div><button id="alerts" class="link">Enable alerts</button><p class="fine">Alerts work in supported browsers while this app is open.</p></div></footer>
       </section>
     </div>
@@ -82,6 +88,8 @@
   </dialog>
   <dialog id="confirm" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">Delete plan?</h2><p id="confirm-copy"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="yes" class="primary destructive">Delete</button></div></form></dialog>
   <div id="toast" role="status" hidden><span id="toast-text"></span><button id="undo" class="link" hidden>Undo</button></div>
+  <dialog id="install-dialog" aria-labelledby="install-title"><div class="dialog-heading"><h2 id="install-title">Daymark, one tap away</h2><button class="icon-button" data-close-dialog aria-label="Close installation help">×</button></div><p>Add Daymark to your device for a focused app window and a home-screen icon.</p><ol class="help-steps"><li><strong>iPhone or iPad:</strong> open in Safari, tap Share, then Add to Home Screen.</li><li><strong>Android:</strong> open in Chrome, then use its menu → Install app or Add to Home screen.</li><li><strong>Windows or Mac:</strong> use the install icon in Chrome or Edge’s address bar. On Safari for Mac, choose File → Add to Dock.</li></ol><p class="fine">Installation options depend on your browser. Internet is needed for your account and plans. Alerts currently work while Daymark is open.</p></dialog>
+  <dialog id="about-dialog" aria-labelledby="about-title"><div class="dialog-heading"><h2 id="about-title">Daymark <span class="version">1.0</span></h2><button class="icon-button" data-close-dialog aria-label="Close about Daymark">×</button></div><p>A little clarity, every day. A personal space for tasks, events and occasions.</p><h3>Your information</h3><p>Your email and plans are stored in the ToDo account service. Access rules restrict each person to their own plans. Your browser stores your login session and appearance preferences.</p><p>The offline cache contains only the app interface, not your plans or account responses. Sign out on shared devices. No advertising or analytics scripts are included.</p><h3>Version 1.0</h3><p>Installable on supported devices. Internet is required to sign in, load and save plans. Reminders are best-effort while the app is open; background push is not included.</p></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -1,4 +1,6 @@
-# Fresh ToDo launch setup
+# Daymark 1.0 launch setup
+
+See RELEASE-1.0.md for current validation limits and DOMAIN.md for exact DNS records.
 
 ## Project
 

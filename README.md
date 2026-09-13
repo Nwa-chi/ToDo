@@ -1,4 +1,4 @@
-# Daymark ToDo — fresh rebuild
+# Daymark ToDo 1.0
 
 Account-based task, event and occasion planner. The previous prototype was
 replaced; its code remains recoverable in Git history.
@@ -12,6 +12,15 @@ replaced; its code remains recoverable in Git history.
 
 Only this project's publishable client configuration is included. No old project
 keys, records or device-local task data are imported.
+
+## Version 1.0
+
+Installable PWA with home-screen icons, an install guide, offline reconnect page,
+clear account errors, current-origin email redirects and refined mobile controls.
+See [release notes](docs/RELEASE-1.0.md) and [domain setup](docs/DOMAIN.md).
+
+Private app: https://daymark-nwachi-todo.nwachi-9670.chatgpt.site
+Requested domain: nwachi.click (DNS and TLS verification pending).
 
 ## Implemented
 
@@ -38,6 +47,7 @@ npm start
 
 Open http://localhost:4173 on the same computer. For hosting, run behind HTTPS.
 The server exposes /healthz and serves only the compiled public files.
+The offline fallback contains no account data. Internet is needed for cloud plans.
 
 Optional container:
 
@@ -74,7 +84,7 @@ owner identity; no public signup can make itself an administrator.
 
 ## Structure
 
-- public/: HTML, styles and favicon.
+- public/: HTML, styles, app icons, manifest and service worker.
 - src/: UI, authentication/data adapter, validated domain logic and public config.
 - scripts/build.mjs: bundles dependencies and copies public assets into dist/.
 - server.mjs: allowlisted HTTP server with security headers.
