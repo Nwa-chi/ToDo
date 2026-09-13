@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.zip
+playwright-report/
+test-results/
+.DS_Store
+supabase/.temp/
+supabase/.branches/
