@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#6c5ce7" />
+  <meta name="description" content="A calm, private task manager that works offline." />
+  <title>Daymark — ToDo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#task-list">Skip to tasks</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">✓</span><span>Daymark</span></div>
+      <nav id="nav" aria-label="Task views">
+        <button class="nav-item active" data-filter="all"><span>▦</span>All tasks <b id="count-all">0</b></button>
+        <button class="nav-item" data-filter="today"><span>○</span>Today <b id="count-today">0</b></button>
+        <button class="nav-item" data-filter="upcoming"><span>↗</span>Upcoming <b id="count-upcoming">0</b></button>
+        <button class="nav-item" data-filter="overdue"><span>!</span>Overdue <b id="count-overdue">0</b></button>
+        <button class="nav-item" data-filter="completed"><span>✓</span>Completed <b id="count-completed">0</b></button>
+      </nav>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Categories</div>
+        <div id="category-nav"></div>
+      </div>
+      <div class="sidebar-foot">
+        <button class="nav-item" id="notification-toggle"><span aria-hidden="true">♢</span><span>Enable alerts</span><b id="notification-state">Off</b></button>
+        <button class="nav-item" id="theme-toggle"><span aria-hidden="true">☾</span><span>Dark theme</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn mobile-only" id="menu-btn" aria-label="Open navigation" aria-expanded="false">☰</button>
+        <div class="greeting"><p id="date-line"></p><h1 id="view-title">All tasks</h1></div>
+        <button class="primary-btn" id="add-task"><span aria-hidden="true">＋</span> Add task</button>
+      </header>
+
+      <section class="progress-card" aria-labelledby="progress-heading">
+        <div><p class="eyebrow">YOUR PROGRESS</p><h2 id="progress-heading">Keep the momentum going</h2><p id="progress-copy">No tasks yet</p></div>
+        <div class="progress-ring" id="progress-ring" aria-label="0% complete"><strong id="progress-percent">0%</strong></div>
+      </section>
+
+      <section class="toolbar" aria-label="Task controls">
+        <label class="search"><span aria-hidden="true">⌕</span><span class="sr-only">Search tasks</span><input id="search" type="search" placeholder="Search tasks…" autocomplete="off" /></label>
+        <div class="toolbar-actions">
+          <select id="priority-filter" aria-label="Filter by priority"><option value="all">All priorities</option><option value="high">High priority</option><option value="medium">Medium priority</option><option value="low">Low priority</option></select>
+          <select id="sort" aria-label="Sort tasks"><option value="due">Due date</option><option value="priority">Priority</option><option value="created">Recently added</option><option value="alpha">A–Z</option></select>
+        </div>
+      </section>
+
+      <section class="task-section">
+        <div class="section-heading"><h2 id="task-heading">Tasks</h2><span id="results-count"></span></div>
+        <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+        <div id="task-list" class="task-list" tabindex="-1"></div>
+        <div id="empty-state" class="empty-state" hidden><div class="empty-icon">✓</div><h2 id="empty-title">All clear</h2><p id="empty-copy">Add a task to start making progress.</p><button class="secondary-btn" id="empty-add">Add your first task</button></div>
+        <button class="text-danger" id="clear-completed" hidden>Clear completed tasks</button>
+      </section>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <dialog id="task-dialog" aria-labelledby="dialog-title">
+    <form id="task-form" novalidate>
+      <div class="dialog-header"><div><p class="eyebrow" id="dialog-kicker">NEW TASK</p><h2 id="dialog-title">Add a task</h2></div><button class="icon-btn" type="button" data-close aria-label="Close">×</button></div>
+      <input type="hidden" id="task-id" />
+      <div class="field"><label for="title">Task title <span>*</span></label><input id="title" maxlength="100" autocomplete="off" placeholder="What needs to be done?" required /><small class="error" id="title-error"></small></div>
+      <div class="field"><label for="description">Description <em>Optional</em></label><textarea id="description" maxlength="500" rows="3" placeholder="Add notes or details…"></textarea><small class="counter"><span id="description-count">0</span>/500</small></div>
+      <div class="form-grid"><div class="field"><label for="due-date">Due date</label><input id="due-date" type="date" /></div><div class="field"><label for="due-time">Time <em>Optional</em></label><input id="due-time" type="time" /></div></div>
+      <fieldset class="field"><legend>Priority</legend><div class="segmented"><label><input type="radio" name="priority" value="low" /><span>Low</span></label><label><input type="radio" name="priority" value="medium" checked /><span>Medium</span></label><label><input type="radio" name="priority" value="high" /><span>High</span></label></div></fieldset>
+      <div class="field"><label for="category">Category</label><input id="category" maxlength="30" list="category-options" placeholder="e.g. Personal" /><datalist id="category-options"></datalist></div>
+      <div class="dialog-actions"><button class="secondary-btn" type="button" data-close>Cancel</button><button class="primary-btn" type="submit" id="save-task">Save task</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><div class="confirm-icon">!</div><h2 id="confirm-title">Delete this task?</h2><p id="confirm-copy">This action cannot be undone.</p><div class="dialog-actions"><button class="secondary-btn" value="cancel">Cancel</button><button class="danger-btn" value="confirm">Delete</button></div></form></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toast-message"></span><button id="undo-btn">Undo</button></div>
+  <script src="app.js"></script>
+</body>
+</html>
