@@ -1,8 +1,5 @@
-*
-!Dockerfile
-!package.json
-!build.cjs
-!server.cjs
-!index.html
-!styles.css
-!app.js
+.git
+node_modules
+dist
+.env*
+test-results

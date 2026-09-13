@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="Daymark — a private place for your tasks, events and occasions.">
+  <title>Daymark · Your day, organised</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <main id="main">
+    <section id="auth" class="auth-layout">
+      <div class="auth-story"><a class="brand" href="/"><span class="logo">✓</span>Daymark</a>
+        <div><p class="eyebrow">A LITTLE CLARITY, EVERY DAY</p><h1>Make room for<br>what matters.</h1><p>Your tasks, plans and important dates.<br>One private place to keep them together.</p></div>
+        <p class="story-foot">Plan your day. Remember the occasion. Take the next step.</p>
+      </div>
+      <div class="auth-box">
+        <p class="eyebrow">WELCOME TO DAYMARK</p>
+        <h2 id="auth-title">Sign in</h2>
+        <p class="muted" id="auth-hint">Your plans are waiting for you.</p>
+        <form id="auth-form">
+          <label id="email-field">Email address<input id="email" type="email" autocomplete="email" maxlength="254" required></label>
+          <label id="password-field">Password<input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128"></label>
+          <label id="code-field" hidden>Verification code<input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10"></label>
+          <p id="auth-error" class="error" role="alert"></p>
+          <button class="primary full" id="auth-submit">Sign in</button>
+        </form>
+        <div class="auth-links"><button id="switch-auth" class="link">Create an account</button><button id="forgot" class="link">Forgot password?</button></div>
+        <button id="resend" class="link" hidden>Resend code</button>
+        <p class="fine">Your records are private to your verified account.</p>
+      </div>
+    </section>
+    <div id="workspace" class="workspace" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="/"><span class="logo">✓</span>Daymark</a>
+        <p class="eyebrow">YOUR SPACE</p>
+        <nav aria-label="Task views" id="navigation">
+          <button data-view="all" class="active">All plans <span id="count-all">0</span></button>
+          <button data-view="today">Today <span id="count-today">0</span></button>
+          <button data-view="upcoming">Upcoming <span id="count-upcoming">0</span></button>
+          <button data-view="overdue">Overdue <span id="count-overdue">0</span></button>
+          <button data-view="completed">Completed <span id="count-completed">0</span></button>
+        </nav>
+        <div class="sidebar-bottom"><p id="account-email"></p><button id="theme" class="secondary">Switch theme</button><button id="logout" class="link">Sign out</button></div>
+      </aside>
+      <section class="content">
+        <header class="page-header"><div><p id="today-label" class="muted"></p><h1 id="view-title">All plans</h1></div><button id="add" class="primary">+ Add a plan</button></header>
+        <section class="summary" aria-label="Progress"><div><p class="eyebrow">ONE STEP AT A TIME</p><h2 id="progress-title">A fresh start</h2><p id="progress-copy">Add your first plan.</p></div><div class="progress-box"><strong id="progress-label">0%</strong><progress id="progress" max="100" value="0">0%</progress></div></section>
+        <section class="controls" aria-label="Filter plans">
+          <label class="search-label"><span class="sr-only">Search plans</span><input id="search" type="search" placeholder="Search your plans…"></label>
+          <label><span class="sr-only">Filter by type</span><select id="kind-filter"><option value="all">Every type</option value="task">Tasks</option value="event">Events</option value="occasion">Occasions</option></select></label>
+          <label><span class="sr-only">Filter by priority</span><select id="priority-filter"><option value="all">All priorities</option value="high">High</option value="medium">Medium</option value="low">Low</option></select></label>
+          <label><span class="sr-only">Filter by category</span><select id="category-filter"><option value="all">All categories</option></select></label>
+          <label><span class="sr-only">Sort plans</span><select id="sort"><option value="due">Due date</option><option value="priority">Priority</option><option value="created">Newest first</option><option value="alpha">A–Z</option></select></label>
+        </section>
+        <div class="list-heading"><h2>Your plans <span id="result-count" class="muted"></span></h2><button id="refresh" class="link">Refresh</button></div>
+        <p id="load-error" role="alert" class="error" hidden></p>
+        <p id="loading" role="status" hidden>Loading your plans…</p>
+        <div id="items"></div>
+        <div id="empty" class="empty" hidden><span class="empty-check">✓</span><h2 id="empty-title">A little space to begin</h2><p id="empty-copy" class="muted">Add a task, event or occasion to your day.</p></div>
+        <footer class="list-footer"><button id="clear" class="link danger" hidden>Clear completed</button><div><button id="alerts" class="link">Enable alerts</button><p class="fine">Alerts work in supported browsers while this app is open.</p></div></footer>
+      </section>
+    </div>
+  </main>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="item-form">
+      <div class="dialog-heading"><h2 id="editor-title">Add a plan</h2><button type="button" id="close-editor" class="icon-button" aria-label="Close">×</button></div>
+      <input type="hidden" id="item-id">
+      <label>Title<input id="item-title" required maxlength="100" placeholder="What would you like to plan?"></label>
+      <label>Description <span class="muted">Optional</span><textarea id="description" maxlength="500" rows="3"></textarea></label>
+      <div class="form-row"><label>Type<select id="kind"><option value="task">Task</option><option value="event">Event</option><option value="occasion">Occasion</option></select></label><label>Priority<select id="priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label></div>
+      <div class="form-row"><label>Date<input id="due-date" type="date"></label><label>Time <span class="muted">Optional</span><input id="due-time" type="time"></label></div>
+      <p id="timezone" class="fine"></p>
+      <div class="form-row"><label>Category<input id="category" maxlength="30" list="categories" placeholder="Personal, work…"><datalist id="categories"></datalist></label><label>Duration in minutes<input id="duration" type="number" min="1" max="10080" placeholder="Optional"></label></div>
+      <p id="item-error" class="error" role="alert"></p>
+      <div class="dialog-actions"><button type="button" id="cancel-editor" class="secondary">Cancel</button><button class="primary" id="save">Save plan</button></div>
+    </form>
+  </dialog>
+  <dialog id="confirm" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">Delete plan?</h2><p id="confirm-copy"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="yes" class="primary destructive">Delete</button></div></form></dialog>
+  <div id="toast" role="status" hidden><span id="toast-text"></span><button id="undo" class="link" hidden>Undo</button></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

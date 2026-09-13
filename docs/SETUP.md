@@ -1,70 +1,70 @@
-# Daymark setup and project boundaries
+# Fresh ToDo launch setup
 
-## Canonical projects
+## Project
 
-- Source: https://github.com/Nwa-chi/ToDo
-- Supabase project: Daymark ToDo
-- Supabase reference: evctsfrxefzzqedeqslg
-- Region: eu-central-1 (Frankfurt)
+Use only Supabase project uolwbaappjrggtaydvsq (ToDo, eu-west-1).
+The migration 20260913201136_fresh_daymark_plans.sql has already been applied to it.
+Do not run it a second time manually against that project.
 
-Daymark has its own repository, database and authentication project. Organisational
-and billing isolation still requires transferring this project to a dedicated
-organisation selected by the owner. No organisation transfer has been performed.
+The connected account currently reports organisation zzqgplncbezrbitakmbh named
+Daymark. A code reset does not create or transfer an organisation. Separate billing
+or membership must be confirmed in the Supabase dashboard.
 
-All further Daymark source, migration history and setup changes should be committed
-to this repository. Exclude secrets, personal records and temporary exports.
+## Authentication and email
 
-## Database
+In the selected project's dashboard:
 
-Migration 20260913172731_daymark_private_items.sql was exported from the actual
-Daymark migration history. It is already applied there; do not apply it again
-manually to the same project.
+1. Enable Email provider and require Confirm email. Do not enable anonymous access.
+2. Set the password minimum to at least eight characters; configure stronger
+   provider password controls as appropriate.
+3. Use docs/EMAIL-TEMPLATE.html in both Confirm signup and Reset password templates.
+   Keep the {{ .Token }} variable, which inserts the real code.
+4. Configure custom SMTP with a verified sender domain for delivery to real users.
+   Enter SMTP credentials in Supabase, never in GitHub or chat.
+5. Configure Site URL and allowed redirects for the final HTTPS app address.
+6. Confirm registration/login/OTP resend rate limits and test them.
 
-The daymark_items table supports tasks, events and occasions, dates, optional
-times, time zone and duration. Database policies restrict CRUD to the owner with
-a confirmed email and a non-deleted, non-banned account. A private helper checks
-the current authenticated identity; callers cannot supply someone else's ID.
-Anonymous clients have no table privileges.
+The app uses signUp with email and password, verifyOtp with type email for
+verification, and type recovery for password-reset codes. A code verification
+response does not override database policy: each database query checks the
+confirmed email of the current authenticated account.
 
-A transactional database test passed owner CRUD, completion timestamps,
-cross-user read/write isolation and unverified-user denial. All test records were
-rolled back. The security advisor returned no findings at that stage.
-
-## Email configuration still required
-
-In Supabase Authentication:
-
-1. Keep Email sign-in and Confirm email enabled.
-2. In Email Templates / Confirm signup, set subject to
-   "Your Daymark verification code".
-3. Use this template:
-
-```html
-<h2>Welcome to Daymark</h2>
-<p>Enter this code in the app to verify your email:</p>
-<p style="font-size:28px;font-weight:bold">{{ .Token }}</p>
-<p>If you did not create an account, ignore this email.</p>
-```
-
-Configure a production SMTP sender and its verified domain before opening
-registration to users. Supply credentials directly in Supabase's settings,
-never in source control or chat. Configure Site URL and allowed redirects once
-the deployment address is known.
+Supabase's default email service is not a substitute for a production SMTP setup.
+Registration and verification UI can be built before that setup, but successful
+delivery must be tested with a real inbox.
 
 References:
+- https://supabase.com/docs/guides/auth/passwords
 - https://supabase.com/docs/guides/auth/auth-email-templates
 - https://supabase.com/docs/guides/auth/auth-smtp
 
-## Remaining implementation
+## Test gate
 
-1. Email/password sign-up, OTP verification and resend limits.
-2. Login, password reset, session handling and logout.
-3. Connect the interface to per-user database CRUD; preserve existing local records
-   until the user explicitly chooses whether to import them.
-4. Event and occasion interfaces with time-zone-aware scheduling.
-5. Admin portal with a supported ChatGPT sign-in and a server-enforced owner
-   allowlist. No administrator has been assigned yet.
-6. End-to-end browser, permission and email tests.
-7. HTTPS deployment and verification of a real user-accessible URL.
+- npm run build and npm test pass.
+- Real database owner CRUD, unverified-account denial, cross-user read/write
+  isolation and completion timestamps have passed transaction-based tests.
+- Supabase security advisor returned no findings after schema creation.
+- Chromium tests passed registration/OTP gating, create/edit/complete/search,
+  delete/undo, reload, mobile width and logout against controlled API responses.
+  Desktop and mobile screenshots were visually checked.
+  No real OTP delivery has been verified yet.
+- Test a real user on two devices, password reset, expired/wrong codes, failure
+  states and sign-out before launch.
 
-The present prototype is not a finished multi-user production application.
+## Admin portal
+
+The desired owner flow is Sign in with ChatGPT. Do not collect the owner's
+ChatGPT password in Daymark. The supported hosting identity integration and
+server-side owner allowlist must be configured before an admin portal is enabled.
+No admin credentials, default password or automatic first-user promotion exists.
+
+## Hosting
+
+Deploy only with the owner's intended visibility. Keep previews private unless
+public visibility is explicitly authorised. Use HTTPS and preserve the server's
+Content-Security-Policy when placing it behind a reverse proxy. The current CSP
+allows network requests only to the selected Supabase project.
+
+Public client config is in src/config.js. If changing projects, update the
+publishable configuration, server policy, migration state and tests together.
+The old project is not a fallback.

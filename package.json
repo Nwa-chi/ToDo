@@ -1,12 +1,22 @@
 {
   "name": "daymark-todo",
-  "version": "0.2.0",
+  "version": "1.0.0-beta.1",
   "private": true,
-  "scripts": {
-    "build": "node build.cjs",
-    "start": "node server.cjs",
-    "test": "node --test release.test.cjs",
-    "check:source": "node tests.js"
+  "type": "module",
+  "engines": {
+    "node": ">=22"
   },
-  "engines": {"node": ">=22"}
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.116.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.62.1"
+  }
 }
