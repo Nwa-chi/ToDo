@@ -210,7 +210,7 @@ $('#undo').onclick=async()=>{
     state.items.push(...data);state.undo=null;$('#undo').hidden=true;
   },'Deletion undone.');
 };
-$('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!button)return;state.view=button.dataset.view;for(const b of document.querySelectorAll('[data-view]')){b.classList.toggle('active',b===button);b.setAttribute('aria-current',b===button?'page':'false')}$('#view-title').textContent=button.childNodes[0].textContent.trim();render()};
+$('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!button)return;state.view=button.dataset.view;for(const b of document.querySelectorAll('[data-view]')){b.classList.toggle('active',b===button);b.setAttribute('aria-current',b===button?'page':'false')}$('#view-title').textContent=button.getAttribute('aria-label')||button.textContent.trim();render()};
 for(const id of ['search','kind-filter','priority-filter','category-filter','sort'])$('#'+id).addEventListener(id==='search'?'input':'change',render);
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
@@ -299,3 +299,12 @@ for(const button of document.querySelectorAll('[data-mobile-view]'))button.oncli
 };
 $('#mobile-link').onclick=()=>{$('#menu-panel').close();$('#join-plan').click()};
 $('#copy-email').onclick=async()=>{try{await navigator.clipboard.writeText(state.user.email);toast('Email address copied.')}catch{toast('Copy the email address shown above.')}};
+
+$('#rail-add').onclick=()=>$('#add').click();
+$('#rail-search').onclick=()=>{$('#search').focus();$('#search').scrollIntoView({block:'center'})};
+for(const control of document.querySelectorAll('.icon-rail [title]')){
+ const show=()=>{$('#rail-tip').textContent=control.getAttribute('title');$('#rail-tip').hidden=false};
+ const hide=()=>{$('#rail-tip').hidden=true};
+ control.addEventListener('pointerenter',show);control.addEventListener('pointerleave',hide);
+ control.addEventListener('focus',show);control.addEventListener('blur',hide);control.addEventListener('click',hide);
+}

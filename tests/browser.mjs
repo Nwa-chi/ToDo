@@ -84,8 +84,7 @@ try{
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile overflow');
  await page.screenshot({path:'test-results/mobile.png',fullPage:true});
- await page.locator('#open-menu').click();
- await page.locator('#menu-panel [data-panel="profile-panel"]').click();
+ await page.locator('.icon-rail [data-panel="profile-panel"]').click();
  await page.locator('#logout').click();await page.locator('#auth').waitFor({state:'visible'});
  assert.equal(await page.locator('.item').count(),0);
  assert.deepEqual(errors,[]);
