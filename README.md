@@ -35,11 +35,12 @@ Selected domain: daymarks.click (registration, DNS and TLS verification pending)
 - Email-code verification and resend cooldown.
 - Password reset using an emailed code and new-password form.
 - Persistent Supabase sessions, sign-out and clearing the displayed user's data.
-- Database-backed CRUD with confirmed-email and per-owner access policies.
+- Database-backed CRUD with confirmed-email and owner/collaborator access policies.
 - Tasks, events and occasions; priority, category, date, optional time and duration.
 - Search, combined filters, sorting, completion counts, progress, delete confirmation
   and short-lived undo.
-- Responsive light/dark interface and opt-in browser notifications while open.
+- Responsive light/dark interface and opt-in server-sent push reminders.
+- Category dropdown and single-use codes for sharing a plan with one other user.
 - Bundled static build, allowlisted HTTP server and container configuration.
 
 ## Run
@@ -100,9 +101,9 @@ User administration is not implemented. No public signup can make itself an admi
 
 Timed plans are stored as UTC instants and displayed in the viewing device's time
 zone. Date-only plans retain their calendar date and become overdue after that day.
-Browser reminders for date-only plans use 09:00 on the viewing device. Notifications
-are best-effort while the page remains open; mobile support varies. They are not
-background push notifications.
+Push reminders run server-side every minute, including when the app is closed.
+Date-only plans use 09:00 in the timezone where their date was set. Delivery depends
+on device support, permission and connectivity. See [sharing and reminder setup](docs/SHARING-AND-REMINDERS.md).
 
 Legacy local records are not erased from users' browsers or silently uploaded.
 Sign-out clears on-screen records, but cannot retract a browser notification that

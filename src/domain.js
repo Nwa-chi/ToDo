@@ -49,5 +49,5 @@ export function validatePlan(input) {
     if(d.getHours()!==Number(input.time.slice(0,2))||d.getMinutes()!==Number(input.time.slice(3)))throw Error('That time does not exist due to a clock change. Choose another time.');
     due_at=d.toISOString();
   }
-  return {title,description,category,kind:input.kind,priority:input.priority,due_date:input.date||null,due_at,duration_minutes:duration};
+  return {title,description,category,kind:input.kind,priority:input.priority,due_date:input.date||null,due_at,reminder_at:input.date?(due_at||new Date(input.date+'T09:00:00').toISOString()):null,duration_minutes:duration};
 }

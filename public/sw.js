@@ -32,3 +32,12 @@ self.addEventListener('notificationclick',event=>{
     if(existing)return existing.focus();return self.clients.openWindow('/');
   })());
 });
+
+self.addEventListener('push',event=>{
+ event.waitUntil((async()=>{
+  let payload={};try{payload=event.data?.json()||{}}catch{}
+  await self.registration.showNotification('Daymark reminder',{
+   body:'A plan is due. Open Daymark to view it.',tag:typeof payload.tag==='string'?payload.tag:'daymark-reminder',icon:'/icons/icon-192.png',badge:'/icons/icon-192.png'
+  });
+ })());
+});

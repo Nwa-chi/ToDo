@@ -1,0 +1,26 @@
+begin;
+create temporary table reminder_fixture(user_id uuid default gen_random_uuid(), plan_id uuid default gen_random_uuid(), device_id uuid default gen_random_uuid());
+insert into reminder_fixture default values;
+insert into auth.users(id,email,email_confirmed_at) select user_id,user_id||'@example.invalid',now() from reminder_fixture;
+insert into public.daymark_items(id,user_id,title,due_date,reminder_at) select plan_id,user_id,'Test reminder',current_date,now()-interval '1 minute' from reminder_fixture;
+insert into daymark_private.push_devices(id,user_id,endpoint,subscription) select device_id,user_id,'https://fcm.googleapis.com/test/'||device_id,'{}'::jsonb from reminder_fixture;
+do $$ declare first_claim jsonb;second_claim jsonb; j uuid;begin
+ first_claim:=daymark_private.push_worker('claim');
+ if not exists(select 1 from jsonb_array_elements(first_claim) x where x->>'plan_id'=(select plan_id::text from reminder_fixture)) then raise exception 'No due job claimed';end if;
+ second_claim:=daymark_private.push_worker('claim');
+ if exists(select 1 from jsonb_array_elements(second_claim) x where x->>'plan_id'=(select plan_id::text from reminder_fixture)) then raise exception 'Duplicate lease';end if;
+ select id into j from daymark_private.push_jobs where plan_id=(select plan_id from reminder_fixture);
+ perform daymark_private.push_worker('finish',j,503);
+ update daymark_private.push_jobs set next_attempt=now()-interval '1 minute' where id=j;
+ update public.daymark_items set completed=true where id=(select plan_id from reminder_fixture);
+ if exists(select 1 from jsonb_array_elements(daymark_private.push_worker('claim')) x where x->>'plan_id'=(select plan_id::text from reminder_fixture)) then raise exception 'Completed plan retried';end if;
+ update public.daymark_items set completed=false where id=(select plan_id from reminder_fixture);
+ if not exists(select 1 from jsonb_array_elements(daymark_private.push_worker('claim')) x where x->>'plan_id'=(select plan_id::text from reminder_fixture)) then raise exception 'Retry not claimed';end if;
+ perform daymark_private.push_worker('finish',j,201);
+ update daymark_private.push_jobs set next_attempt=now()-interval '1 minute' where id=j;
+ if exists(select 1 from jsonb_array_elements(daymark_private.push_worker('claim')) x where x->>'plan_id'=(select plan_id::text from reminder_fixture)) then raise exception 'Delivered job repeated';end if;
+ perform daymark_private.push_worker('finish',j,410);
+ if exists(select 1 from daymark_private.push_devices where id=(select device_id from reminder_fixture)) then raise exception 'Expired subscription retained';end if;
+end $$;
+select 'Reminder claim, deduplication, retry, completion suppression and expired subscription removal passed' as result;
+rollback;

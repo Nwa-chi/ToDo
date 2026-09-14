@@ -34,3 +34,10 @@ test('search and combined filters use the production filtering function',()=>{
  assert.equal(filterItems(list,{...filters,priority:'low',category:'Work'})[0].id,'b');
  assert.equal(filterItems(list,{...filters,sort:'alpha'})[0].id,'b');
 });
+test('reminders use local 09:00 for date-only plans and exact time otherwise',()=>{
+ const dateOnly=validatePlan(input);
+ assert.equal(new Date(dateOnly.reminder_at).getHours(),9);
+ assert.equal(localDate(new Date(dateOnly.reminder_at)),input.date);
+ const timed=validatePlan({...input,time:'16:45'});assert.equal(timed.reminder_at,timed.due_at);
+ assert.equal(validatePlan({...input,date:''}).reminder_at,null);
+});

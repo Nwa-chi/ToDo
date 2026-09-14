@@ -35,3 +35,10 @@ test('email-delivery errors explain service failure without claiming success',()
  assert.match(authErrorMessage({code:'invalid_credentials'}),/not recognised/);
  assert.match(authErrorMessage({status:429}),/wait/);
 });
+test('push displays a generic notification without private payload text',async()=>{
+ const {listeners,context}=environment();let shown,done;
+ context.self.registration={showNotification:async(title,options)=>shown={title,options}};
+ listeners.push({data:{json:()=>({title:'Private title',body:'Sensitive description',tag:'plan-id'})},waitUntil:p=>done=p});
+ await done;assert.equal(shown.title,'Daymark reminder');assert.equal(shown.options.tag,'plan-id');assert.ok(!shown.options.body.includes('Sensitive'));
+ listeners.push({data:{json:()=>{throw Error('invalid')}},waitUntil:p=>done=p});await done;assert.equal(shown.options.tag,'daymark-reminder');
+});

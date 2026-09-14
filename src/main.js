@@ -1,3 +1,4 @@
+import {enablePush,disablePush,restorePush} from './push.js';
 import {setupInstall} from './pwa.js';
 import {authErrorMessage} from './auth-errors.js';
 import {client,listPlans,savePlan,deletePlans} from './api.js';
@@ -30,7 +31,7 @@ function authMode(mode) {
 }
 function clearWorkspace(){
   state.epoch++;refreshSequence++;state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
-  $('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
+  $('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
 async function establishSession(){
@@ -43,6 +44,7 @@ async function establishSession(){
   if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear()}
   state.user=data.user;$('#auth').hidden=true;$('#workspace').hidden=false;$('#account-email').textContent=data.user.email;
   await refresh();
+  try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
 }
 client.auth.onAuthStateChange((event)=>{
   if(event==='SIGNED_OUT'){clearWorkspace();authMode('login')}
@@ -101,7 +103,7 @@ $('#resend').onclick=async()=>{
   }catch(e){$('#auth-error').textContent=authErrorMessage(e)}
   finally{authBusy=false;$('#resend').disabled=false}
 };
-$('#logout').onclick=async()=>{if(state.busy)return;$('#logout').disabled=true;try{const {error}=await client.auth.signOut();if(error)throw error;clearWorkspace();authMode('login')}catch(e){toast(e.message)}finally{$('#logout').disabled=false}};
+$('#logout').onclick=async()=>{if(state.busy)return;$('#logout').disabled=true;try{await disablePush();const {error}=await client.auth.signOut();if(error)throw error;clearWorkspace();authMode('login')}catch(e){toast(e.message)}finally{$('#logout').disabled=false}};
 const filters=()=>({view:state.view,kind:$('#kind-filter').value,priority:$('#priority-filter').value,category:$('#category-filter').value,sort:$('#sort').value,search:$('#search').value});
 function dateLabel(t){
   if(t.due_at)return new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date(t.due_at));
@@ -113,15 +115,15 @@ function render(){
   $('#items').innerHTML=items.map(t=>`<article class="item ${t.completed?'complete':''} ${overdue(t)?'overdue':''}" data-id="${t.id}">
     <input type="checkbox" data-complete ${t.completed?'checked':''} aria-label="${escape((t.completed?'Reopen ':'Complete ')+t.title)}">
     <div><div class="item-title">${escape(t.title)}</div>${t.description?`<p class="item-desc">${escape(t.description)}</p>`:''}
-    <div class="meta"><span class="chip">${escape(t.kind)}</span><span class="chip ${t.priority==='high'?'high':''}">${escape(t.priority)} priority</span><span class="chip">${escape(t.category)}</span><span class="chip ${overdue(t)?'high':''}">${overdue(t)?'Overdue · ':''}${escape(dateLabel(t))}</span>${t.duration_minutes?`<span class="chip">${t.duration_minutes} min</span>`:''}</div></div>
-    <div class="item-actions"><button data-edit class="link" aria-label="Edit ${escape(t.title)}">Edit</button><button data-delete class="link danger" aria-label="Delete ${escape(t.title)}">Delete</button></div></article>`).join('');
+    <div class="meta">${t.collaborator_id?`<span class="chip">Shared · ${t.user_id===state.user.id?'Owner':'Collaborator'}</span>`:''}<span class="chip">${escape(t.kind)}</span><span class="chip ${t.priority==='high'?'high':''}">${escape(t.priority)} priority</span><span class="chip">${escape(t.category)}</span><span class="chip ${overdue(t)?'high':''}">${overdue(t)?'Overdue · ':''}${escape(dateLabel(t))}</span>${t.duration_minutes?`<span class="chip">${t.duration_minutes} min</span>`:''}</div></div>
+    <div class="item-actions"><button data-edit class="link" aria-label="Edit ${escape(t.title)}">Edit</button><button data-share class="link" aria-label="Sharing for ${escape(t.title)}">${t.collaborator_id?'Sharing':'Share'}</button>${t.user_id===state.user.id?`<button data-delete class="link danger" aria-label="Delete ${escape(t.title)}">Delete</button>`:''}</div></article>`).join('');
   $('#empty-action').textContent=state.items.length?'Reset filters':'Add your first plan';
   $('#empty').hidden=items.length>0;$('#empty-title').textContent=state.items.length?'No matching plans':'A little space to begin';$('#empty-copy').textContent=state.items.length?'Try another filter or search.':'Add a task, event or occasion to your day.';
   const complete=state.items.filter(t=>t.completed).length,total=state.items.length,percent=total?Math.round(complete/total*100):0;
   $('#progress-label').textContent=percent+'%';$('#progress').value=percent;
   $('#progress-title').textContent=total?(complete===total?'Everything is checked off':'Make steady progress'):'A fresh start';
   $('#progress-copy').textContent=total?`${complete} of ${total} completed · ${total-complete} remaining`:'Add your first plan.';
-  $('#clear').hidden=!complete;
+  $('#clear').hidden=!state.items.some(t=>t.completed&&t.user_id===state.user.id);
   for(const view of ['all','today','upcoming','overdue','completed'])$('#count-'+view).textContent=state.items.filter(t=>matchesView(t,view)).length;
   lockControls(state.busy);
 }
@@ -129,7 +131,10 @@ function categories(){
   const current=$('#category-filter').value,list=[...new Set(state.items.map(t=>t.category))].sort();
   $('#category-filter').innerHTML='<option value="all">All categories</option>'+list.map(c=>`<option value="${escape(c)}">${escape(c)}</option>`).join('');
   $('#category-filter').value=list.includes(current)?current:'all';
-  $('#categories').innerHTML=list.map(c=>`<option value="${escape(c)}"></option>`).join('');
+  const selected=$('#category').value;
+  const options=[...new Set(['Uncategorised','Personal','Work','Study','Family','Health & fitness','Finance','Shopping','Travel','Birthdays & occasions','Home',...list])];
+  $('#category').innerHTML=options.map(c=>`<option value="${escape(c)}">${escape(c)}</option>`).join('');
+  $('#category').value=options.includes(selected)?selected:'Uncategorised';
 }
 async function refresh(){
   if(!state.user||state.busy)return;
@@ -141,7 +146,7 @@ async function refresh(){
   finally{if(epoch===state.epoch&&sequence===refreshSequence)$('#loading').hidden=true}
 }
 function lockControls(busy){
-  for(const element of document.querySelectorAll('#add,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
+  for(const element of document.querySelectorAll('#add,#join-plan,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
 }
 async function mutation(fn,success){
   if(state.busy||!state.user)return;
@@ -154,7 +159,7 @@ async function mutation(fn,success){
 function edit(item){
   if(state.busy)return;
   $('#item-form').reset();$('#item-id').value=item?.id||'';$('#editor-title').textContent=item?'Edit plan':'Add a plan';$('#item-error').textContent='';
-  $('#item-title').value=item?.title||'';$('#description').value=item?.description||'';$('#kind').value=item?.kind||'task';$('#priority').value=item?.priority||'medium';$('#category').value=item?.category||'';
+  $('#item-title').value=item?.title||'';$('#description').value=item?.description||'';$('#kind').value=item?.kind||'task';$('#priority').value=item?.priority||'medium';$('#category').value=item?.category||'Uncategorised';
   $('#due-date').value=item?displayDate(item):'';$('#due-time').value=item?.due_at?new Date(item.due_at).toTimeString().slice(0,5):'';$('#duration').value=item?.duration_minutes||'';
   $('#timezone').textContent='Times use '+Intl.DateTimeFormat().resolvedOptions().timeZone+'. Timed plans follow the same moment across devices.';
   $('#editor').showModal();$('#item-title').focus();
@@ -169,6 +174,8 @@ $('#item-form').onsubmit=async e=>{
   try{plan=validatePlan({title:$('#item-title').value,description:$('#description').value,category:$('#category').value,kind:$('#kind').value,priority:$('#priority').value,date:$('#due-date').value,time:$('#due-time').value,duration:$('#duration').value})}
   catch(e){$('#item-error').textContent=e.message;return}
   const id=$('#item-id').value;
+  const previous=state.items.find(t=>t.id===id);
+  if(previous&&previous.due_date===plan.due_date&&previous.due_at===plan.due_at)plan.reminder_at=previous.reminder_at;
   await mutation(async(epoch)=>{const saved=await savePlan(plan,id);if(epoch!==state.epoch)return;state.items=id?state.items.map(t=>t.id===id?saved:t):[saved,...state.items];$('#editor').close()},'Plan saved.');
 };
 async function confirmDelete(items){
@@ -187,15 +194,16 @@ async function confirmDelete(items){
 }
 $('#items').onclick=async e=>{
   const card=e.target.closest('[data-id]');if(!card||state.busy)return;const item=state.items.find(t=>t.id===card.dataset.id);
+  if(e.target.matches('[data-share]'))openSharing(item);
   if(e.target.matches('[data-edit]'))edit(item);
   if(e.target.matches('[data-delete]'))await confirmDelete([item]);
   if(e.target.matches('[data-complete]'))await mutation(async(epoch)=>{const saved=await savePlan({completed:!item.completed},item.id);if(epoch!==state.epoch)return;state.items=state.items.map(t=>t.id===item.id?saved:t)},item.completed?'Plan reopened.':'Plan completed.');
 };
-$('#clear').onclick=()=>confirmDelete(state.items.filter(t=>t.completed));
+$('#clear').onclick=()=>confirmDelete(state.items.filter(t=>t.completed&&t.user_id===state.user.id));
 $('#undo').onclick=async()=>{
   const undo=state.undo;if(!undo||undo.userId!==state.user?.id)return;
   await mutation(async(epoch)=>{
-    const rows=undo.items.map(({user_id,updated_at,...item})=>item);
+    const rows=undo.items.map(({id,title,description,kind,priority,category,completed,due_date,due_at,duration_minutes,reminder_at})=>({id,title,description,kind,priority,category,completed,due_date,due_at,duration_minutes,reminder_at}));
     const {data,error}=await client.from('daymark_items').insert(rows).select();if(error)throw error;
     if(epoch!==state.epoch)return;
     state.items.push(...data);state.undo=null;$('#undo').hidden=true;
@@ -206,25 +214,12 @@ for(const id of ['search','kind-filter','priority-filter','category-filter','sor
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 $('#alerts').onclick=async()=>{
-  if(state.alerts){state.alerts=false;$('#alerts').textContent='Enable alerts';return}
-  if(!('Notification'in window)){toast('This browser does not support these alerts.');return}
-  try{const permission=await Notification.requestPermission();if(permission!=='granted'){toast('Allow notifications in your browser settings to enable alerts.');return}state.alerts=true;$('#alerts').textContent='Disable alerts';toast('Alerts enabled while the app remains open.');checkAlerts()}
-  catch(e){toast('Notifications are unavailable in this browser.')}
+  $('#alerts').disabled=true;
+  try{if(state.alerts){await disablePush();state.alerts=false;toast('Alerts disabled on this device.')}else{state.alerts=await enablePush();toast('Background alerts enabled on this device.')}}
+  catch(e){toast(e.message)}finally{$('#alerts').disabled=false;$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}
 };
-async function checkAlerts(){
-  if(!state.user||!state.alerts)return;
-  const now=Date.now();
-  for(const item of state.items){
-    if(item.completed||(!item.due_at&&!item.due_date))continue;
-    const at=item.due_at?new Date(item.due_at).getTime():new Date(item.due_date+'T09:00:00').getTime();
-    const key=state.user.id+':'+item.id+':'+at;
-    if(now<at||now-at>86400000||sentAlerts.has(key)||preference('daymark-alert:'+key,'')==='sent')continue;
-    try{sentAlerts.add(key);const options={body:item.title,tag:item.id,icon:'/icons/icon-192.png'};const registration=await navigator.serviceWorker?.getRegistration();if(registration)await registration.showNotification('Daymark · Due now',options);else new Notification('Daymark · Due now',options);try{localStorage.setItem('daymark-alert:'+key,'sent')}catch{}}
-    catch{state.alerts=false;$('#alerts').textContent='Enable alerts';toast('This browser cannot show scheduled alerts.');return}
-  }
-}
-setInterval(()=>{if(state.user){render();checkAlerts()}},30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(state.user)refresh();checkAlerts()}});
+setInterval(()=>{if(state.user&&!document.hidden)refresh()},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.user)refresh()});
 authMode('login');
 
 setupInstall(toast);
@@ -235,3 +230,31 @@ for(const b of document.querySelectorAll('[data-close-dialog]'))b.onclick=()=>b.
 
 $('#reset-filters').onclick=()=>{$('#search').value='';for(const id of ['kind-filter','priority-filter','category-filter'])$('#'+id).value='all';render();$('#search').focus()};
 for(const button of document.querySelectorAll('[data-date]'))button.onclick=()=>{const choice=button.dataset.date;if(choice==='clear'){$('#due-date').value='';$('#due-time').value='';return;}const date=new Date();if(choice==='tomorrow')date.setDate(date.getDate()+1);$('#due-date').value=localDate(date)};
+
+let sharingItem=null,sharingBusy=false;
+function openSharing(item=null){
+ if(state.busy||sharingBusy)return;
+ sharingItem=item;$('#sharing-title').textContent=item?'Share this plan':'Link a plan';
+ $('#sharing-error').textContent='';$('#invite-code').value='';$('#invite-code').readOnly=!!item;
+ $('#invite-field').hidden=!!item;$('#share-copy').hidden=true;
+ const owner=item?.user_id===state.user.id;
+ $('#sharing-copy').textContent=!item?'Enter the code from the plan owner. You’ll both be able to edit and complete it.':!owner?'You can edit and complete this shared plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. Remove access to stop sharing.':'Create a single-use code for one person. It expires after 24 hours. Creating another code replaces the previous one.';
+ $('#share-submit').hidden=!!item?.collaborator_id;$('#share-submit').textContent=item?'Create code':'Link plan';
+ $('#share-revoke').hidden=!item;$('#share-revoke').textContent=owner?'Revoke invitation / access':'Leave plan';
+ $('#sharing').showModal();if(!item)$('#invite-code').focus();
+}
+$('#join-plan').onclick=()=>openSharing();
+async function sharingAction(action){
+ if(sharingBusy)return;sharingBusy=true;const epoch=state.epoch;
+ for(const b of document.querySelectorAll('#sharing button'))b.disabled=true;
+ try{
+  const {data,error}=await client.rpc('daymark_share',{p_plan:sharingItem?.id||null,p_action:action,p_code:$('#invite-code').value.trim().toLowerCase()});if(error)throw error;
+  if(epoch!==state.epoch)return;
+  if(action==='invite'){$('#invite-field').hidden=false;$('#invite-code').value=data;$('#share-copy').hidden=false;$('#sharing-copy').textContent='Send this code privately to one person. They should sign in, choose Link a plan, and enter it within 24 hours.'}
+  else{$('#sharing').close();await refresh();toast(action==='join'?'Plan linked.':action==='leave'?'You left the plan.':'Invitation and shared access revoked.')}
+ }catch(e){$('#sharing-error').textContent=e.message}
+ finally{sharingBusy=false;for(const b of document.querySelectorAll('#sharing button'))b.disabled=false}
+}
+$('#sharing-form').onsubmit=e=>{e.preventDefault();sharingAction(sharingItem?'invite':'join')};
+$('#share-revoke').onclick=()=>sharingAction(sharingItem?.user_id===state.user.id?'revoke':'leave');
+$('#share-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#invite-code').value);toast('Invitation code copied.')}catch{$('#invite-code').select();$('#sharing-error').textContent='Select and copy the invitation code.'}};

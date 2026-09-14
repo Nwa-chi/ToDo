@@ -60,7 +60,7 @@ try{
  await page.locator('#kind').selectOption('event');
  await page.locator('#due-date').fill('2026-10-01');
  await page.locator('#due-time').fill('14:30');
- await page.locator('#category').fill('Work');
+ await page.locator('#category').selectOption('Work');
  await page.locator('#save').click();
  await page.locator('.item-title').filter({hasText:'Launch planning'}).waitFor();
  assert.equal(writes,1);
