@@ -31,7 +31,7 @@ function authMode(mode) {
 }
 function clearWorkspace(){
   state.epoch++;refreshSequence++;state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
-  $('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
+  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
 async function establishSession(){
@@ -286,3 +286,16 @@ navigator.serviceWorker?.addEventListener('message',async event=>{
  notifiedPlan=item.id;$('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
  if(event.data.type==='OPEN_PLAN')openNotifiedPlan(item.id);
 });
+
+$('#open-menu').onclick=()=>$('#menu-panel').showModal();
+for(const button of document.querySelectorAll('[data-panel]'))button.onclick=()=>{
+ $('#menu-panel').close();
+ $('#email-address').textContent=state.user?.email||'';
+ $('#profile-since').textContent=state.user?.created_at?'Joined '+new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric'}).format(new Date(state.user.created_at)):'';
+ $('#'+button.dataset.panel).showModal();
+};
+for(const button of document.querySelectorAll('[data-mobile-view]'))button.onclick=()=>{
+ $('#menu-panel').close();document.querySelector('[data-view="'+button.dataset.mobileView+'"]').click();
+};
+$('#mobile-link').onclick=()=>{$('#menu-panel').close();$('#join-plan').click()};
+$('#copy-email').onclick=async()=>{try{await navigator.clipboard.writeText(state.user.email);toast('Email address copied.')}catch{toast('Copy the email address shown above.')}};
