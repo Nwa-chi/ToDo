@@ -35,7 +35,7 @@ function authMode(mode) {
 }
 function clearWorkspace(){
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
-  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
+  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
 async function establishSession(){
@@ -49,6 +49,7 @@ async function establishSession(){
   if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear()}
   state.user=data.user;$('#auth').hidden=true;$('#workspace').hidden=false;$('#account-email').textContent=data.user.email;
   await refresh();
+  if(location.hash==='#invitations')openInvitations();
   if(location.hash.startsWith('#plan='))openNotifiedPlan(location.hash.slice(6));
   try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
 }
@@ -146,6 +147,7 @@ function categories(){
 function refresh(){
   if(!state.user||state.busy)return Promise.resolve();
   if(refreshTask)return refreshTask;
+  void refreshInvitations();
   const epoch=state.epoch,sequence=++refreshSequence;
   $('#sync-status').textContent='Syncing…';
   $('#loading').hidden=state.items.length>0;$('#items').setAttribute('aria-busy','true');$('#load-error').hidden=true;
@@ -261,8 +263,9 @@ function openSharing(item=null){
  $('#sharing-error').textContent='';$('#invite-code').value='';$('#invite-code').readOnly=!!item;
  $('#invite-field').hidden=!!item;$('#share-copy').hidden=true;
  const owner=item?.user_id===state.user.id;
- $('#sharing-copy').textContent=!item?'Enter the code from the plan owner. You’ll both be able to edit and complete it.':!owner?'You can edit and complete this shared plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. Remove access to stop sharing.':'Create a single-use code for one person. It expires after 24 hours. Creating another code replaces the previous one.';
- $('#share-submit').hidden=!!item?.collaborator_id;$('#share-submit').textContent=item?'Create code':'Link plan';
+ $('#invite-email').value='';$('#invite-email-field').hidden=!owner||!!item?.collaborator_id;$('#invite-email').required=owner&&!item?.collaborator_id;$('#share-code').hidden=!owner||!!item?.collaborator_id;
+ $('#sharing-copy').textContent=!item?'Enter the code from the plan owner. You’ll both be able to edit and complete it.':!owner?'You can edit and complete this shared plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. Remove access to stop sharing.':'Enter their verified Daymark account email. They’ll receive an invitation to accept or decline. Sending another invitation replaces the previous one.';
+ $('#share-submit').hidden=!!item?.collaborator_id;$('#share-submit').textContent=item?'Send invitation':'Link plan';
  $('#share-revoke').hidden=!item;$('#share-revoke').textContent=owner?'Revoke invitation / access':'Leave plan';
  $('#sharing').showModal();if(!item)$('#invite-code').focus();
 }
@@ -271,14 +274,16 @@ async function sharingAction(action){
  if(sharingBusy)return;sharingBusy=true;const epoch=state.epoch;
  for(const b of document.querySelectorAll('#sharing button'))b.disabled=true;
  try{
-  const {data,error}=await client.rpc('daymark_share',{p_plan:sharingItem?.id||null,p_action:action,p_code:$('#invite-code').value.trim().toLowerCase()});if(error)throw error;
+  const {data,error}=action==='send'?await client.rpc('daymark_invitation',{p_action:'send',p_plan:sharingItem.id,p_email:$('#invite-email').value.trim()}):await client.rpc('daymark_share',{p_plan:sharingItem?.id||null,p_action:action,p_code:$('#invite-code').value.trim().toLowerCase()});if(error)throw error;
   if(epoch!==state.epoch)return;
-  if(action==='invite'){$('#invite-field').hidden=false;$('#invite-code').value=data;$('#share-copy').hidden=false;$('#sharing-copy').textContent='Send this code privately to one person. They should sign in, choose Link a plan, and enter it within 24 hours.'}
+  if(action==='send'){$('#sharing').close();toast('Invitation requested. If this email has a verified Daymark account, they’ll find it in Invitations.');}
+  else if(action==='invite'){$('#invite-field').hidden=false;$('#invite-code').value=data;$('#share-copy').hidden=false;$('#sharing-copy').textContent='Send this code privately to one person. They should sign in, choose Link a plan, and enter it within 24 hours.'}
   else{$('#sharing').close();await refresh();toast(action==='join'?'Plan linked.':action==='leave'?'You left the plan.':'Invitation and shared access revoked.')}
  }catch(e){$('#sharing-error').textContent=e.message}
  finally{sharingBusy=false;for(const b of document.querySelectorAll('#sharing button'))b.disabled=false}
 }
-$('#sharing-form').onsubmit=e=>{e.preventDefault();sharingAction(sharingItem?'invite':'join')};
+$('#sharing-form').onsubmit=e=>{e.preventDefault();sharingAction(sharingItem?'send':'join')};
+$('#share-code').onclick=()=>sharingAction('invite');
 $('#share-revoke').onclick=()=>sharingAction(sharingItem?.user_id===state.user.id?'revoke':'leave');
 $('#share-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#invite-code').value);toast('Invitation code copied.')}catch{$('#invite-code').select();$('#sharing-error').textContent='Select and copy the invitation code.'}};
 
@@ -308,7 +313,14 @@ navigator.serviceWorker?.addEventListener('message',async event=>{
  if(event.data.type==='OPEN_PLAN')openNotifiedPlan(item.id);
 });
 
-$('#open-menu').onclick=()=>$('#menu-panel').showModal();
+$('#open-menu').onclick=()=>setSidebar($('#workspace').classList.contains('sidebar-collapsed'));
+$('#close-sidebar').onclick=()=>setSidebar(false);
+function setSidebar(open){
+ $('#workspace').classList.toggle('sidebar-collapsed',!open);$('#daymark-sidebar').hidden=!open;$('#open-menu').setAttribute('aria-expanded',String(open));$('#open-menu').setAttribute('aria-label',open?'Hide sidebar':'Show sidebar');$('#rail-tip').hidden=true;
+ if(!open&&$('#daymark-sidebar').contains(document.activeElement))$('#open-menu').focus();
+ try{localStorage.setItem('daymark-sidebar',open?'open':'closed')}catch{}
+}
+setSidebar(preference('daymark-sidebar','open')==='open');
 for(const button of document.querySelectorAll('[data-panel]'))button.onclick=()=>{
  $('#menu-panel').close();
  $('#email-address').textContent=state.user?.email||'';
@@ -329,3 +341,38 @@ for(const control of document.querySelectorAll('.icon-rail [title]')){
  control.addEventListener('pointerenter',show);control.addEventListener('pointerleave',hide);
  control.addEventListener('focus',show);control.addEventListener('blur',hide);control.addEventListener('click',hide);
 }
+
+const invitationsRequest=createRefreshRequest(async signal=>{
+ const {data,error}=await client.rpc('daymark_invitation',{p_action:'list'}).abortSignal(signal);if(error)throw error;return data||[];
+});
+let invitationBusy=false;
+async function refreshInvitations(){
+ if(!state.user||invitationBusy)return;
+ const epoch=state.epoch;
+ try{
+  const rows=await invitationsRequest.run();if(epoch!==state.epoch)return;
+  $('#invitation-badge').textContent=rows.length;$('#invitation-badge').hidden=!rows.length;
+  $('#invitations-open').setAttribute('aria-label',rows.length?`Invitations, ${rows.length} pending`:'Invitations');
+  $('#invitation-status').textContent=rows.length?'':'No pending invitations. You’re all caught up.';
+  $('#invitation-list').innerHTML=rows.map(row=>`<article class="invitation-card"><h3>${escape(row.title)}</h3><p>From ${escape(row.sender_email)}</p><p class="fine">Expires ${escape(new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date(row.expires_at)))}</p><div class="dialog-actions"><button class="secondary" data-invitation="${escape(row.id)}" data-decision="decline">Decline</button><button class="primary" data-invitation="${escape(row.id)}" data-decision="accept">Accept plan</button></div></article>`).join('');
+ }catch{if(epoch===state.epoch)$('#invitation-status').textContent='Could not load invitations. Please try Refresh invitations.';}
+}
+function openInvitations(){if(!state.user)return;$('#invitations-panel').showModal();void refreshInvitations();if(location.hash==='#invitations')history.replaceState(null,'',location.pathname+location.search);}
+$('#invitations-open').onclick=openInvitations;
+$('#invitations-refresh').onclick=()=>refreshInvitations();
+$('#invitation-list').onclick=async event=>{
+ const button=event.target.closest('[data-decision]');if(!button||invitationBusy)return;
+ invitationBusy=true;const epoch=state.epoch;invitationsRequest.cancel();
+ for(const b of document.querySelectorAll('#invitation-list button'))b.disabled=true;
+ try{
+  const {error}=await client.rpc('daymark_invitation',{p_action:button.dataset.decision,p_invitation:button.dataset.invitation});if(error)throw error;
+  if(epoch!==state.epoch)return;
+  toast(button.dataset.decision==='accept'?'Invitation accepted. The plan is now in your list.':'Invitation declined.');cancelRefresh();await refresh();
+ }catch(e){if(epoch===state.epoch)$('#invitation-status').textContent=e.message;}
+ finally{invitationBusy=false;if(epoch===state.epoch){for(const b of document.querySelectorAll('#invitation-list button'))b.disabled=false;await refreshInvitations();}}
+};
+navigator.serviceWorker?.addEventListener('message',event=>{
+ if(!state.user)return;
+ if(event.data?.type==='INVITATION_RECEIVED'){void refreshInvitations();toast('You have a new plan invitation. Open Invitations to review it.');}
+ if(event.data?.type==='OPEN_INVITATIONS')openInvitations();
+});

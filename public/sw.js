@@ -25,17 +25,17 @@ self.addEventListener('fetch',event=>{
   event.respondWith(caches.match(request).then(cached=>cached||fetch(request)));
 });
 
-function notificationOptions(tag,test=false){
+function notificationOptions(tag,test=false,invitation=false){
  return {
-  body:test?'Alerts are ready. Sound and vibration follow your device settings.':'Your scheduled plan needs your attention. Tap View plan to open it.',
+  body:test?'Alerts are ready. Sound and vibration follow your device settings.':invitation?'Someone invited you to share a plan. Open Daymark to accept or decline.':'Your scheduled plan needs your attention. Tap View plan to open it.',
   tag,icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',
   requireInteraction:true,renotify:true,silent:false,vibrate:[250,100,250,100,400],
-  timestamp:Date.now(),data:{planId:test?null:tag},
-  actions:[{action:'open',title:test?'Open Daymark':'View plan'},{action:'dismiss',title:'Dismiss'}]
+  timestamp:Date.now(),data:{planId:test||invitation?null:tag,invitation},
+  actions:[{action:'open',title:test?'Open Daymark':invitation?'Review invitation':'View plan'},{action:'dismiss',title:'Dismiss'}]
  };
 }
-async function showAlert(tag,test=false){
- const title=test?'Daymark · Test alert':'Daymark · Plan due now',options=notificationOptions(tag,test);
+async function showAlert(tag,test=false,invitation=false){
+ const title=test?'Daymark · Test alert':invitation?'Daymark · Plan invitation':'Daymark · Plan due now',options=notificationOptions(tag,test,invitation);
  try{await self.registration.showNotification(title,options)}
  catch{await self.registration.showNotification(title,{body:options.body,tag,icon:options.icon,data:options.data})}
 }
@@ -45,20 +45,22 @@ self.addEventListener('message',event=>{
 self.addEventListener('notificationclick',event=>{
  event.notification.close();if(event.action==='dismiss')return;
  event.waitUntil((async()=>{
+  const invitation=event.notification.data?.invitation===true;
   const id=event.notification.data?.planId;
   const valid=typeof id==='string'&&/^[a-f0-9-]{36}$/i.test(id);
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
   const existing=windows.find(client=>new URL(client.url).origin===self.location.origin);
-  if(existing){await existing.focus();if(valid)existing.postMessage({type:'OPEN_PLAN',id});return;}
-  return self.clients.openWindow(valid?'/#plan='+encodeURIComponent(id):'/');
+  if(existing){await existing.focus();if(invitation){existing.postMessage({type:'OPEN_INVITATIONS'});return;}if(valid)existing.postMessage({type:'OPEN_PLAN',id});return;}
+  return self.clients.openWindow(invitation?'/#invitations':valid?'/#plan='+encodeURIComponent(id):'/');
  })());
 });
 self.addEventListener('push',event=>{
  event.waitUntil((async()=>{
   let payload={};try{payload=event.data?.json()||{}}catch{}
   const tag=typeof payload.tag==='string'?payload.tag:'daymark-reminder';
-  await showAlert(tag);
+  const invitation=payload.kind==='invitation';
+  await showAlert(tag,false,invitation);
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
-  for(const client of windows)if(new URL(client.url).origin===self.location.origin)client.postMessage({type:'PLAN_DUE',id:tag});
+  for(const client of windows)if(new URL(client.url).origin===self.location.origin)client.postMessage({type:invitation?'INVITATION_RECEIVED':'PLAN_DUE',id:tag});
  })());
 });

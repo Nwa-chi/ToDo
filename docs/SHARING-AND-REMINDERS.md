@@ -90,3 +90,29 @@ Browser/OS support varies: websites cannot force volume, custom system sounds,
 or bypass silent mode, Focus or battery restrictions. Unsupported rich options
 fall back to a basic notification. Automated tests cover daily totals, alert options,
 fallback, and notification actions; actual device sound/vibration needs a device test.
+
+## Addressed invitations and sidebar toggle
+
+Use the header menu button to hide/show the sidebar, or its top arrow to close it.
+The preference is saved on this browser. Invitations remain accessible in the header
+when the sidebar is hidden.
+
+On a saved plan choose Share, enter the recipient's verified Daymark account email,
+and Send invitation. The recipient opens Invitations in the header and accepts or
+declines. Acceptance grants the one collaborator slot. Pending invitations expire
+in 24 hours; another invitation or code replaces the previous one. The existing
+code option remains available under Use a code instead.
+
+An in-app pending count refreshes on load, refresh and every 30 seconds while visible.
+The existing minute-by-minute worker also delivers invitation push alerts to the
+recipient's opted-in devices. Tap Review invitation to open the inbox. No plan title
+or email is sent in the lock-screen payload. Device delivery remains best effort;
+in-app invitations work even without push permission. No SMTP email is sent here.
+
+For privacy, the sender sees the same acknowledgement when an address is unknown,
+unverified or their own. The recipient must already have a verified Daymark account.
+Sending is limited to ten requests per hour per owner. Tests in
+supabase/tests/addressed-invitations.sql run in a rolled-back transaction and cover
+recipient isolation, accept, decline, expiry and privileged worker isolation.
+Private queue tables remain denied to direct client access. The existing Auth
+leaked-password-protection advisory is unchanged; see the security link above.

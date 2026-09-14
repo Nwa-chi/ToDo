@@ -61,3 +61,13 @@ test('dismiss does not open a window; clicking targets the plan without navigati
  context.self.clients.matchAll=async()=>[];context.self.clients.openWindow=async url=>opened=url;
  listeners.notificationclick({notification:{close:()=>{},data:{planId:id}},waitUntil:p=>done=p});await done;assert.equal(opened,'/#plan='+id);
 });
+test('invitation pushes offer review and open the invitation inbox',async()=>{
+ const {listeners,context}=environment();let done,shown,opened;
+ context.self.registration={showNotification:async(title,options)=>shown={title,options}};
+ listeners.push({data:{json:()=>({kind:'invitation',tag:'invite-test'})},waitUntil:p=>done=p});await done;
+ assert.equal(shown.title,'Daymark · Plan invitation');assert.equal(shown.options.actions[0].title,'Review invitation');
+ assert.equal(shown.options.data.invitation,true);assert.equal(shown.options.data.planId,null);
+ context.self.clients.openWindow=async url=>opened=url;
+ listeners.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>done=p});await done;
+ assert.equal(opened,'/#invitations');
+});
