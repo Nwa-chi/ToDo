@@ -1,3 +1,4 @@
+import {createRefreshRequest} from './refresh-request.js';
 import {enablePush,disablePush,restorePush,testPush} from './push.js';
 import {setupInstall} from './pwa.js';
 import {authErrorMessage} from './auth-errors.js';
@@ -8,6 +9,9 @@ const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>'
 const state={user:null,items:[],view:'all',mode:'login',busy:false,epoch:0,undo:null,alerts:false};
 let authBusy=false,toastTimer,resendUntil=0,refreshSequence=0;
 const sentAlerts=new Set();
+const refreshRequest=createRefreshRequest(listPlans);
+let refreshTask=null,lastRenderedDay='';
+function cancelRefresh(){refreshSequence++;refreshRequest.cancel();refreshTask=null;if($('#sync-status').textContent==='Syncing…')$('#sync-status').textContent='';$('#loading').hidden=true;$('#items').setAttribute('aria-busy','false');}
 function preference(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
 document.documentElement.dataset.theme=preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
 $('#theme').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('daymark-theme',theme)}catch{}};
@@ -30,7 +34,7 @@ function authMode(mode) {
   $('#forgot').hidden=mode!=='login';$('#resend').hidden=!verifying;
 }
 function clearWorkspace(){
-  state.epoch++;refreshSequence++;state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
+  state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
@@ -38,7 +42,8 @@ async function establishSession(){
   const epoch=state.epoch;
   const {data,error}=await client.auth.getUser();
   if(epoch!==state.epoch)return;
-  if(error||!data.user){clearWorkspace();return}
+  if(error){if(error.status===401||error.status===403)clearWorkspace();else toast('Could not verify your connection. Your saved plans have not been removed.');return}
+  if(!data.user){clearWorkspace();return}
   if(!data.user.email_confirmed_at){clearWorkspace();authMode('verify');return}
   if(['recoveryverify','update'].includes(state.mode))return;
   if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear()}
@@ -111,6 +116,7 @@ function dateLabel(t){
   return t.due_date?new Intl.DateTimeFormat('en-GB',{dateStyle:'medium'}).format(new Date(t.due_date+'T12:00:00')):'No date';
 }
 function render(){
+  lastRenderedDay=localDate();
   const currentFilters=filters();const items=filterItems(state.items,currentFilters);$('#reset-filters').hidden=!currentFilters.search&&currentFilters.kind==='all'&&currentFilters.priority==='all'&&currentFilters.category==='all';
   $('#result-count').textContent=String(items.length);
   $('#items').innerHTML=items.map(t=>`<article class="item ${t.completed?'complete':''} ${overdue(t)?'overdue':''}" data-id="${t.id}">
@@ -137,22 +143,38 @@ function categories(){
   $('#category').innerHTML=options.map(c=>`<option value="${escape(c)}">${escape(c)}</option>`).join('');
   $('#category').value=options.includes(selected)?selected:'Uncategorised';
 }
-async function refresh(){
-  if(!state.user||state.busy)return;
+function refresh(){
+  if(!state.user||state.busy)return Promise.resolve();
+  if(refreshTask)return refreshTask;
   const epoch=state.epoch,sequence=++refreshSequence;
   $('#sync-status').textContent='Syncing…';
-  $('#loading').hidden=false;$('#empty').hidden=true;$('#load-error').hidden=true;
-  try{const items=await listPlans();if(epoch!==state.epoch||sequence!==refreshSequence)return;state.items=items;categories();render();$('#sync-status').textContent='Up to date'}
-  catch(e){if(epoch===state.epoch){$('#sync-status').textContent='Sync unavailable';$('#load-error').textContent=navigator.onLine?'Could not load your plans. Please try Refresh.':'You’re offline. Reconnect to load your plans.';$('#load-error').hidden=false}}
-  finally{if(epoch===state.epoch&&sequence===refreshSequence)$('#loading').hidden=true}
+  $('#loading').hidden=state.items.length>0;$('#items').setAttribute('aria-busy','true');$('#load-error').hidden=true;
+  refreshTask=(async()=>{
+   try{
+    const items=await refreshRequest.run();if(epoch!==state.epoch||sequence!==refreshSequence)return;
+    const changed=JSON.stringify(items)!==JSON.stringify(state.items);
+    state.items=items;
+    // Preserve keyboard focus and open editor selections during quiet background reads.
+    if(changed||lastRenderedDay!==localDate()||!$('#items').children.length){categories();render();}
+    $('#sync-status').textContent='Up to date';
+   }catch(e){
+    if(epoch!==state.epoch||sequence!==refreshSequence)return;
+    $('#sync-status').textContent='Sync unavailable';
+    $('#load-error').textContent=navigator.onLine?'Could not refresh. Your last loaded plans are still shown. Select Refresh to retry.':'You’re offline. Your last loaded plans are still shown.';
+    $('#load-error').hidden=false;
+   }finally{
+    if(epoch===state.epoch&&sequence===refreshSequence){refreshTask=null;if($('#sync-status').textContent==='Syncing…')$('#sync-status').textContent='';$('#loading').hidden=true;$('#items').setAttribute('aria-busy','false');}
+   }
+  })();
+  return refreshTask;
 }
 function lockControls(busy){
-  for(const element of document.querySelectorAll('#add,#join-plan,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
+  for(const element of document.querySelectorAll('#add,#rail-add,#join-plan,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
 }
 async function mutation(fn,success){
   if(state.busy||!state.user)return;
   if(!navigator.onLine){toast('You’re offline. Reconnect before saving changes.');render();return;}
-  state.busy=true;lockControls(true);const epoch=state.epoch;refreshSequence++;
+  state.busy=true;lockControls(true);const epoch=state.epoch;cancelRefresh();
   try{await fn(epoch);if(epoch!==state.epoch)return;categories();render();if(success)toast(success)}
   catch(e){if(epoch===state.epoch){render();$('#item-error').textContent=e.message;toast('Not saved: '+e.message)}}
   finally{state.busy=false;lockControls(false)}
@@ -210,7 +232,7 @@ $('#undo').onclick=async()=>{
     state.items.push(...data);state.undo=null;$('#undo').hidden=true;
   },'Deletion undone.');
 };
-$('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!button)return;state.view=button.dataset.view;for(const b of document.querySelectorAll('[data-view]')){b.classList.toggle('active',b===button);b.setAttribute('aria-current',b===button?'page':'false')}$('#view-title').textContent=button.getAttribute('aria-label')||button.textContent.trim();render()};
+$('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!button)return;$('#search').value='';for(const id of ['kind-filter','priority-filter','category-filter'])$('#'+id).value='all';document.querySelector('.filter-disclosure').open=false;state.view=button.dataset.view;for(const b of document.querySelectorAll('[data-view]')){b.classList.toggle('active',b===button);b.setAttribute('aria-current',b===button?'page':'false')}$('#view-title').textContent=button.getAttribute('aria-label')||button.textContent.trim();render()};
 for(const id of ['search','kind-filter','priority-filter','category-filter','sort'])$('#'+id).addEventListener(id==='search'?'input':'change',render);
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
@@ -266,8 +288,7 @@ function openNotifiedPlan(id){
  const item=state.items.find(t=>t.id===id);
  if(!item){toast('This plan is no longer available.');return;}
  if($('#editor').open){toast('Save or close your current edit, then open the reminder.');return;}
- $('#search').value=item.title;for(const key of ['kind-filter','priority-filter','category-filter'])$('#'+key).value='all';
- document.querySelector('[data-view="all"]').click();
+ document.querySelector('[data-view="all"]').click();$('#search').value=item.title;render();
  const card=[...document.querySelectorAll('#items [data-id]')].find(c=>c.dataset.id===id);
  if(card){card.tabIndex=-1;card.focus({preventScroll:true});card.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
  $('#due-banner').hidden=true;history.replaceState(null,'',location.pathname+location.search);

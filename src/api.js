@@ -3,11 +3,11 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 export const client=createClient(SUPABASE_URL,SUPABASE_KEY,{
   auth:{storageKey:'daymark-todo-auth-v1',persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
 });
-export async function listPlans() {
+export async function listPlans(signal) {
   // Page rather than silently truncating the user's list at the API row limit.
   const rows=[];
   for(let start=0;;start+=500){
-    const {data,error}=await client.from('daymark_items').select('*').order('created_at',{ascending:false}).order('id').range(start,start+499);
+    const {data,error}=await client.from('daymark_items').select('*').order('created_at',{ascending:false}).order('id').range(start,start+499).abortSignal(signal);
     if(error)throw error;
     rows.push(...data);
     if(data.length<500)return rows;

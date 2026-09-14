@@ -21,3 +21,10 @@ test('PWA endpoints return usable MIME types and no cached service worker',async
  }
  assert.equal((await fetch(base+'/sw.js')).headers.get('cache-control'),'no-store');
 });
+test('entrypoint uses versioned assets that bypass older service-worker caches',async()=>{
+ const html=await(await fetch(base)).text();
+ const script=html.match(/src="(\/app.js\?v=[a-f0-9]{16})"/)[1];
+ const style=html.match(/href="(\/styles.css\?v=[a-f0-9]{16})"/)[1];
+ for(const file of [script,style])assert.equal((await fetch(base+file)).status,200);
+ const worker=await(await fetch(base+'/sw.js')).text();assert.ok(worker.includes(script));assert.ok(worker.includes(style));
+});

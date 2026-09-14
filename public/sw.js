@@ -1,6 +1,6 @@
 // Cache only public interface files. Never cache sessions, API responses or plans.
 const CACHE='daymark-shell-1.0.0-__BUILD_ID__';
-const ASSETS=['/offline.html','/app.js','/styles.css','/favicon.svg','/manifest.webmanifest','/icons/icon-192.png','/icons/icon-512.png','/icons/maskable-512.png'];
+const ASSETS=['/offline.html','/app.js?v=__BUILD_ID__','/styles.css?v=__BUILD_ID__','/favicon.svg','/manifest.webmanifest','/icons/icon-192.png','/icons/icon-512.png','/icons/maskable-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
   for(const path of ASSETS){
@@ -21,7 +21,7 @@ self.addEventListener('fetch',event=>{
     // Respect the host's access check online. Offline displays no private records.
     event.respondWith(fetch(request).catch(()=>caches.match('/offline.html')));return;
   }
-  if(!ASSETS.includes(url.pathname)||url.search)return;
+  if(!ASSETS.includes(url.pathname+url.search))return;
   event.respondWith(caches.match(request).then(cached=>cached||fetch(request)));
 });
 

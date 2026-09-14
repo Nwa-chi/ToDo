@@ -9,6 +9,8 @@ await build({ absWorkingDir:root, entryPoints:['src/main.js'], outfile:'dist/app
   bundle:true, minify:true, format:'esm', target:['es2022'], sourcemap:false });
 const hash=createHash('sha256');
 for(const name of ['app.js','index.html','styles.css','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'])hash.update(await readFile(root+'dist/'+name));
+const version=hash.digest('hex').slice(0,16);
+for(const page of ['index.html','offline.html']){const html=await readFile(root+'dist/'+page,'utf8');await writeFile(root+'dist/'+page,html.replaceAll('/app.js','/app.js?v='+version).replaceAll('/styles.css','/styles.css?v='+version));}
 const worker=await readFile(root+'public/sw.js','utf8');
-await writeFile(root+'dist/sw.js',worker.replace('__BUILD_ID__',hash.digest('hex').slice(0,16)));
+await writeFile(root+'dist/sw.js',worker.replaceAll('__BUILD_ID__',version));
 console.log('Daymark 1.0 build complete.');
