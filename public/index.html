@@ -55,7 +55,8 @@
       </aside>
       <section class="content">
         <header class="page-header"><div><p id="today-label" class="muted"></p><h1 id="view-title">All plans</h1></div><button id="join-plan" class="secondary">Link a plan</button><button id="add" class="primary">+ Add a plan</button></header>
-        <section class="summary" aria-label="Progress"><div><p class="eyebrow">ONE STEP AT A TIME</p><h2 id="progress-title">A fresh start</h2><p id="progress-copy">Add your first plan.</p></div><div class="progress-box"><strong id="progress-label">0%</strong><progress id="progress" max="100" value="0">0%</progress></div></section>
+        <aside id="due-banner" class="due-banner" role="status" hidden><div><strong>Plan due now</strong><p id="due-banner-title"></p></div><button id="due-open" class="primary">View plan</button><button id="due-dismiss" class="secondary">Dismiss</button></aside>
+        <section class="summary" aria-label="Today’s completion progress"><div><p class="eyebrow">TODAY’S PLANS</p><h2 id="progress-title">A fresh start</h2><p id="progress-copy">Add your first plan.</p></div><div class="progress-box"><strong id="progress-label">0%</strong><progress aria-label="Today’s plans completed" id="progress" max="100" value="0">0%</progress></div></section>
         <section class="controls" aria-label="Filter plans">
           <label class="search-label"><span>Search</span><input id="search" type="search" placeholder="Search your plans…"></label>
           <label><span>Type</span><select id="kind-filter"><option value="all">Every type</option value="task">Tasks</option value="event">Events</option value="occasion">Occasions</option></select></label>
@@ -68,7 +69,7 @@
         <p id="loading" role="status" hidden>Loading your plans…</p>
         <div id="items"></div>
         <div id="empty" class="empty" hidden><span class="empty-check" aria-hidden="true">✓</span><h2 id="empty-title">A little space to begin</h2><p id="empty-copy" class="muted">Add a task, event or occasion to your day.</p><button id="empty-action" class="secondary">Add your first plan</button></div>
-        <footer class="list-footer"><button id="clear" class="link danger" hidden>Clear completed</button><div><button id="alerts" class="link">Enable alerts</button><p class="fine">Push reminders work when Daymark is closed on supported devices. Date-only plans remind at 09:00. Device settings may delay delivery.</p></div></footer>
+        <footer class="list-footer"><button id="clear" class="link danger" hidden>Clear completed</button><div><button id="alerts" class="link">Enable alerts</button><button id="test-alert" class="link">Test alert</button><p class="fine">Push reminders work when Daymark is closed on supported devices. Date-only plans remind at 09:00. Alerts request vibration and stay visible where supported. Enable notification sounds in your device settings; silent mode and Focus still apply.</p></div></footer>
       </section>
     </div>
   </main>

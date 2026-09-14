@@ -71,3 +71,22 @@ and apply migrations in order, adapting the scheduler project URL if needed.
 - Supabase advisory: leaked-password protection is disabled in existing Auth settings.
   See https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection.
   Private tables intentionally have no user RLS policies (deny all direct access).
+
+## Daily progress and alert presentation
+
+The summary now measures all plans scheduled for today in the viewing device's
+local timezone, including completed plans. Undated plans and other dates are excluded.
+Search and list filters do not change this daily total; the date is recalculated
+on refresh and when the app becomes visible.
+
+Alerts request a vibration pattern, default device sound and continued display
+until dismissed where supported. View plan focuses the associated plan after
+sign-in; Dismiss closes the notification. An open app also shows a persistent
+reminder banner with the plan title once the account's access has been checked.
+The lock screen continues to use generic text for privacy.
+
+Test alert checks local notification presentation, not end-to-end push delivery.
+Browser/OS support varies: websites cannot force volume, custom system sounds,
+or bypass silent mode, Focus or battery restrictions. Unsupported rich options
+fall back to a basic notification. Automated tests cover daily totals, alert options,
+fallback, and notification actions; actual device sound/vibration needs a device test.

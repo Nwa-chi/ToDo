@@ -23,3 +23,5 @@ dialog{border:1px solid var(--line);border-radius:18px;padding:28px;max-height:9
 /* Clear labels and fewer steps for everyday planning. */
 .controls label>span{display:block;font-size:.75rem;color:var(--muted);margin:0 0 7px}.quick-dates{display:flex;gap:10px;flex-wrap:wrap}.quick-dates .secondary{padding:7px 14px;min-height:44px}.step-label{color:var(--accent);font-size:.8rem;font-weight:650;margin:16px 0 8px}#reset-filters{margin:-16px 0 12px}.controls{align-items:end}.auth-box #auth-step+.muted{line-height:1.6}
 @media(max-width:800px){.controls .search-label{flex-basis:100%}.controls label{flex-basis:calc(50% - 10px);min-width:0}.auth-box .auth-links{flex-wrap:wrap;gap:8px 20px}.auth-box .app-links{gap:14px}.auth-box .app-links .version{margin-left:0}}
+
+.due-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:20px;margin:0 0 20px;border:2px solid #8980ee;border-radius:16px;background:var(--surface);box-shadow:0 6px 24px #7165d522}.due-banner>div{flex:1;min-width:160px}.due-banner p{margin:6px 0 0;overflow-wrap:anywhere}.item:focus{outline:3px solid #8980ee;outline-offset:3px}

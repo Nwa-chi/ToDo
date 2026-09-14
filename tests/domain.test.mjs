@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {validatePlan,filterItems,overdue,localDate} from '../src/domain.js';
+import {validatePlan,filterItems,overdue,localDate,dailyProgress} from '../src/domain.js';
 const input={title:'Plan',description:'',category:'Work',kind:'task',priority:'high',date:'2026-09-13',time:'',duration:''};
 test('validates required fields, valid dates and time dependencies',()=>{
  assert.throws(()=>validatePlan({...input,title:' '}),/title/);
@@ -40,4 +40,14 @@ test('reminders use local 09:00 for date-only plans and exact time otherwise',()
  assert.equal(localDate(new Date(dateOnly.reminder_at)),input.date);
  const timed=validatePlan({...input,time:'16:45'});assert.equal(timed.reminder_at,timed.due_at);
  assert.equal(validatePlan({...input,date:''}).reminder_at,null);
+});
+
+test('daily progress excludes other dates and undated plans, includes completed today',()=>{
+ const now=new Date('2026-09-14T12:00:00');
+ const items=[{due_date:'2026-09-14',completed:true},{due_date:'2026-09-14',completed:false},{due_date:'2026-09-13',completed:false},{due_date:'2026-09-15',completed:true},{completed:true}];
+ assert.deepEqual(dailyProgress(items,now),{total:2,complete:1,remaining:1,percent:50});
+ assert.equal(dailyProgress(items,new Date('2026-09-15T12:00:00')).percent,100);
+ assert.deepEqual(dailyProgress([],now),{total:0,complete:0,remaining:0,percent:0});
+ const timed={due_date:'1999-01-01',due_at:new Date('2026-09-14T15:00:00').toISOString(),completed:true};
+ assert.equal(dailyProgress([timed],now).percent,100);
 });

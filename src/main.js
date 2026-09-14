@@ -1,8 +1,8 @@
-import {enablePush,disablePush,restorePush} from './push.js';
+import {enablePush,disablePush,restorePush,testPush} from './push.js';
 import {setupInstall} from './pwa.js';
 import {authErrorMessage} from './auth-errors.js';
 import {client,listPlans,savePlan,deletePlans} from './api.js';
-import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan} from './domain.js';
+import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan,dailyProgress} from './domain.js';
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={user:null,items:[],view:'all',mode:'login',busy:false,epoch:0,undo:null,alerts:false};
@@ -32,7 +32,7 @@ function authMode(mode) {
 function clearWorkspace(){
   state.epoch++;refreshSequence++;state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   $('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
-  $('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
+  $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
 async function establishSession(){
   const epoch=state.epoch;
@@ -44,6 +44,7 @@ async function establishSession(){
   if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear()}
   state.user=data.user;$('#auth').hidden=true;$('#workspace').hidden=false;$('#account-email').textContent=data.user.email;
   await refresh();
+  if(location.hash.startsWith('#plan='))openNotifiedPlan(location.hash.slice(6));
   try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
 }
 client.auth.onAuthStateChange((event)=>{
@@ -119,10 +120,10 @@ function render(){
     <div class="item-actions"><button data-edit class="link" aria-label="Edit ${escape(t.title)}">Edit</button><button data-share class="link" aria-label="Sharing for ${escape(t.title)}">${t.collaborator_id?'Sharing':'Share'}</button>${t.user_id===state.user.id?`<button data-delete class="link danger" aria-label="Delete ${escape(t.title)}">Delete</button>`:''}</div></article>`).join('');
   $('#empty-action').textContent=state.items.length?'Reset filters':'Add your first plan';
   $('#empty').hidden=items.length>0;$('#empty-title').textContent=state.items.length?'No matching plans':'A little space to begin';$('#empty-copy').textContent=state.items.length?'Try another filter or search.':'Add a task, event or occasion to your day.';
-  const complete=state.items.filter(t=>t.completed).length,total=state.items.length,percent=total?Math.round(complete/total*100):0;
-  $('#progress-label').textContent=percent+'%';$('#progress').value=percent;
-  $('#progress-title').textContent=total?(complete===total?'Everything is checked off':'Make steady progress'):'A fresh start';
-  $('#progress-copy').textContent=total?`${complete} of ${total} completed · ${total-complete} remaining`:'Add your first plan.';
+  const {complete,total,percent}=dailyProgress(state.items);
+  $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());$('#progress-label').textContent=percent+'%';$('#progress').value=percent;
+  $('#progress-title').textContent=total?(complete===total?'Today is complete':'Today’s progress'):'No plans for today';
+  $('#progress-copy').textContent=total?`${complete} of ${total} today’s plans completed · ${total-complete} remaining`:'Add a plan dated today to start your daily progress.';
   $('#clear').hidden=!state.items.some(t=>t.completed&&t.user_id===state.user.id);
   for(const view of ['all','today','upcoming','overdue','completed'])$('#count-'+view).textContent=state.items.filter(t=>matchesView(t,view)).length;
   lockControls(state.busy);
@@ -258,3 +259,30 @@ async function sharingAction(action){
 $('#sharing-form').onsubmit=e=>{e.preventDefault();sharingAction(sharingItem?'invite':'join')};
 $('#share-revoke').onclick=()=>sharingAction(sharingItem?.user_id===state.user.id?'revoke':'leave');
 $('#share-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#invite-code').value);toast('Invitation code copied.')}catch{$('#invite-code').select();$('#sharing-error').textContent='Select and copy the invitation code.'}};
+
+let notifiedPlan=null;
+function openNotifiedPlan(id){
+ if(!state.user||!id)return;
+ const item=state.items.find(t=>t.id===id);
+ if(!item){toast('This plan is no longer available.');return;}
+ if($('#editor').open){toast('Save or close your current edit, then open the reminder.');return;}
+ $('#search').value=item.title;for(const key of ['kind-filter','priority-filter','category-filter'])$('#'+key).value='all';
+ document.querySelector('[data-view="all"]').click();
+ const card=[...document.querySelectorAll('#items [data-id]')].find(c=>c.dataset.id===id);
+ if(card){card.tabIndex=-1;card.focus({preventScroll:true});card.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+ $('#due-banner').hidden=true;history.replaceState(null,'',location.pathname+location.search);
+}
+$('#due-open').onclick=()=>openNotifiedPlan(notifiedPlan);
+$('#due-dismiss').onclick=()=>{$('#due-banner').hidden=true};
+$('#test-alert').onclick=async()=>{
+ $('#test-alert').disabled=true;
+ try{if(!state.alerts){state.alerts=await enablePush();$('#alerts').textContent='Disable alerts';}await testPush();toast('Test alert requested on this device. Sound follows your device settings.');}
+ catch(e){toast(e.message)}finally{$('#test-alert').disabled=false}
+};
+navigator.serviceWorker?.addEventListener('message',async event=>{
+ if(!['PLAN_DUE','OPEN_PLAN'].includes(event.data?.type)||!state.user)return;
+ const epoch=state.epoch;await refresh();if(epoch!==state.epoch)return;
+ const item=state.items.find(t=>t.id===event.data.id);if(!item||item.completed)return;
+ notifiedPlan=item.id;$('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
+ if(event.data.type==='OPEN_PLAN')openNotifiedPlan(item.id);
+});

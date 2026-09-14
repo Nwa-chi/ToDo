@@ -23,3 +23,9 @@ export async function disablePush(){
  const reg=await navigator.serviceWorker.getRegistration(),subscription=await reg?.pushManager.getSubscription();
  if(subscription){await settings({p_remove:subscription.endpoint});await subscription.unsubscribe();}
 }
+
+export async function testPush(){
+ const reg=await registration();
+ if(!reg.active)throw Error('Reload Daymark to finish its update, then test again.');
+ reg.active.postMessage({type:'TEST_ALERT'});
+}

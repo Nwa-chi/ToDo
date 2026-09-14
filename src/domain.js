@@ -51,3 +51,10 @@ export function validatePlan(input) {
   }
   return {title,description,category,kind:input.kind,priority:input.priority,due_date:input.date||null,due_at,reminder_at:input.date?(due_at||new Date(input.date+'T09:00:00').toISOString()):null,duration_minutes:duration};
 }
+
+// Completed plans stay in today's denominator; undated/other-day plans do not.
+export function dailyProgress(items, now = new Date()) {
+  const today=localDate(now),daily=items.filter(item=>displayDate(item)===today);
+  const total=daily.length,complete=daily.filter(item=>item.completed).length;
+  return {total,complete,remaining:total-complete,percent:total?Math.round(complete/total*100):0};
+}

@@ -6,7 +6,7 @@ import {authErrorMessage} from '../src/auth-errors.js';
 const worker=await readFile(new URL('../public/sw.js',import.meta.url),'utf8');
 function environment(){
  const listeners={},cached=new Map(),network=[];
- const self={location:{origin:'https://daymark.test'},addEventListener:(name,fn)=>listeners[name]=fn,clients:{claim:async()=>{}},skipWaiting:()=>{}};
+ const self={location:{origin:'https://daymark.test'},addEventListener:(name,fn)=>listeners[name]=fn,clients:{claim:async()=>{},matchAll:async()=>[]},skipWaiting:()=>{}};
  const cache={put:async(k,v)=>cached.set(k,v),match:async k=>cached.get(k)};
  const context={self,URL,Request,Error,caches:{open:async()=>cache,match:async r=>cached.get(typeof r==='string'?r:r.url),keys:async()=>[],delete:async()=>true},fetch:async r=>{network.push(r);return new Response('online')}};
  vm.runInNewContext(worker,context);return{listeners,cached,network,context};
@@ -39,6 +39,25 @@ test('push displays a generic notification without private payload text',async()
  const {listeners,context}=environment();let shown,done;
  context.self.registration={showNotification:async(title,options)=>shown={title,options}};
  listeners.push({data:{json:()=>({title:'Private title',body:'Sensitive description',tag:'plan-id'})},waitUntil:p=>done=p});
- await done;assert.equal(shown.title,'Daymark reminder');assert.equal(shown.options.tag,'plan-id');assert.ok(!shown.options.body.includes('Sensitive'));
+ await done;assert.equal(shown.title,'Daymark · Plan due now');assert.equal(shown.options.tag,'plan-id');assert.ok(!shown.options.body.includes('Sensitive'));
  listeners.push({data:{json:()=>{throw Error('invalid')}},waitUntil:p=>done=p});await done;assert.equal(shown.options.tag,'daymark-reminder');
+});
+
+test('strong alerts request vibration and persistence with graceful fallback',async()=>{
+ const {listeners,context}=environment();let done,calls=[];
+ context.self.registration={showNotification:async(title,options)=>{calls.push(options);if(calls.length===1)throw Error('unsupported option')}};
+ listeners.push({data:{json:()=>({tag:'plan-id'})},waitUntil:p=>done=p});await done;
+ assert.equal(calls[0].requireInteraction,true);assert.equal(calls[0].silent,false);assert.equal(calls[0].renotify,true);
+ assert.equal(calls[0].actions[0].action,'open');assert.ok(calls[0].vibrate.length>0);
+ assert.equal(calls.length,2);assert.equal(calls[1].data.planId,'plan-id');
+});
+test('dismiss does not open a window; clicking targets the plan without navigating an open editor',async()=>{
+ const {listeners,context}=environment();let closed=false,focused=false,message,done,opened;
+ const id='00000000-0000-4000-8000-000000000001';
+ context.self.clients.matchAll=async()=>[{url:'https://daymark.test/',focus:async()=>{focused=true},postMessage:m=>message=m}];
+ listeners.notificationclick({action:'dismiss',notification:{close:()=>closed=true},waitUntil:()=>{throw Error('dismiss opened app')}});assert.ok(closed);
+ listeners.notificationclick({notification:{close:()=>{},data:{planId:id}},waitUntil:p=>done=p});await done;
+ assert.ok(focused);assert.equal(message.id,id);assert.equal(message.type,'OPEN_PLAN');
+ context.self.clients.matchAll=async()=>[];context.self.clients.openWindow=async url=>opened=url;
+ listeners.notificationclick({notification:{close:()=>{},data:{planId:id}},waitUntil:p=>done=p});await done;assert.equal(opened,'/#plan='+id);
 });
