@@ -66,9 +66,11 @@ try{
  assert.equal(writes,1);
  await page.locator('[data-edit]').click();await page.locator('#item-title').fill('Updated launch planning');await page.locator('#save').click();
  await page.locator('.item-title').filter({hasText:'Updated'}).waitFor();
+ await page.locator('#rail-search').click();
  await page.locator('#search').fill('no match');assert.equal(await page.locator('.item').count(),0);
  await page.locator('#search').fill('event details');assert.equal(await page.locator('.item').count(),1);
  await page.locator('#search').fill('');
+ await page.locator('#search-panel').getByRole('button',{name:'Show plans'}).click();
  await page.locator('[data-complete]').check();
  await page.locator('[data-view=completed]').click();
  await page.locator('.item.complete').waitFor();

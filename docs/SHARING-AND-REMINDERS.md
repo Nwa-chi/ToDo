@@ -116,3 +116,16 @@ supabase/tests/addressed-invitations.sql run in a rolled-back transaction and co
 recipient isolation, accept, decline, expiry and privileged worker isolation.
 Private queue tables remain denied to direct client access. The existing Auth
 leaked-password-protection advisory is unchanged; see the security link above.
+
+## Plans spanning several days
+
+Set Start date and an optional End date in Add/Edit plan. The plan appears on every
+included day and counts once in each day's progress. Completing the plan completes
+it as a whole; there are no separate daily checkboxes. Multi-day plans become overdue
+after the end date. The reminder remains at the start date/time (09:00 without a time);
+extending the end date does not send another reminder. Single-day plans are unchanged.
+The database rejects end dates before the start and end dates without a start date.
+
+Search, category/type/priority filters, and sorting now live in the sidebar's search
+panel. Open the search icon, make selections, then choose Show plans. They no longer
+occupy the main page. If the sidebar is hidden, reopen it with the header menu button.

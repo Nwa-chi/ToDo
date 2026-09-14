@@ -51,3 +51,18 @@ test('daily progress excludes other dates and undated plans, includes completed 
  const timed={due_date:'1999-01-01',due_at:new Date('2026-09-14T15:00:00').toISOString(),completed:true};
  assert.equal(dailyProgress([timed],now).percent,100);
 });
+test('multi-day plans appear on every included day and expire after the end date',()=>{
+ const item={...validatePlan({...input,date:'2026-09-14',endDate:'2026-09-16',time:'08:00'}),completed:false};
+ const filters={view:'today',kind:'all',category:'all',priority:'all',search:'',sort:'due'};
+ for(const day of ['14','15','16']){
+  const now=new Date(`2026-09-${day}T12:00:00`);
+  assert.equal(filterItems([item],filters,now).length,1);assert.equal(dailyProgress([item],now).total,1);assert.equal(overdue(item,now),false);
+ }
+ assert.equal(overdue(item,new Date('2026-09-17T00:01:00')),true);
+ assert.equal(dailyProgress([item],new Date('2026-09-17T12:00:00')).total,0);
+ assert.equal(dailyProgress([{...item,completed:true}],new Date('2026-09-15T12:00:00')).percent,100);
+ assert.throws(()=>validatePlan({...input,date:'',endDate:'2026-09-16'}),/end date/);
+ assert.throws(()=>validatePlan({...input,endDate:'2026-09-01'}),/end date/);
+ assert.throws(()=>validatePlan({...input,endDate:'2026-02-30'}),/end date/);
+ assert.equal(validatePlan(input).end_date,null);
+});
