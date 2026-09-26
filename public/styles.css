@@ -47,3 +47,39 @@ dialog{border:1px solid var(--line);border-radius:18px;padding:28px;max-height:9
 #workspace #open-menu{display:block!important;min-width:44px;min-height:44px}.workspace.sidebar-collapsed{grid-template-columns:minmax(0,1fr)}.icon-rail #close-sidebar{display:grid;place-items:center;width:100%;min-height:44px;border:0;border-radius:10px;background:transparent;color:#d8dae5}.icon-rail #close-sidebar:hover{background:#252631}.invitation-badge{display:inline-block;min-width:18px;padding:1px 5px;margin-left:5px;border-radius:10px;background:var(--accent);color:var(--surface);font-size:.75rem}.invitation-card{padding:18px 0;border-top:1px solid var(--line)}.invitation-card h3,.invitation-card p{overflow-wrap:anywhere}.invitation-card h3{margin:0 0 8px;font-size:1rem}.invitation-card p{margin:0 0 8px;font-size:.875rem}#invitations-open{min-height:44px;padding:8px 12px}.page-header{flex-wrap:wrap}
 
 .search-panel{width:min(360px,95vw)}.search-panel .controls{display:grid;grid-template-columns:1fr;margin:20px 0}.search-panel .filter-disclosure{margin:0}.search-panel .filter-options{position:static;width:100%;display:grid;grid-template-columns:1fr;box-shadow:none;border:0;padding:16px 0}.search-panel .controls label{min-width:0}.search-panel #reset-filters{margin:0 0 14px}
+
+/* Fit the workspace to the available viewport, including status banners. */
+body:has(#workspace:not([hidden])){height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+body:has(#workspace:not([hidden]))>#main{flex:1;min-height:0;min-width:0}
+body:has(#workspace:not([hidden]))>#connection,body:has(#workspace:not([hidden]))>#notice{flex-shrink:0}
+#main>.workspace{height:100%;width:100%;min-width:0}
+.content{overflow-x:hidden;overflow-y:auto}
+.page-header,.summary,.list-heading,.list-footer,.dialog-heading,.dialog-actions{min-width:0}
+.summary>div:first-child,.list-heading>h2,.item>div{min-width:0}
+.page-header h1,.summary h2,.summary p,.chip,.dialog-heading h2,#sync-status{overflow-wrap:anywhere}
+.chip{max-width:100%}
+.list-heading{flex-wrap:wrap;gap:8px 12px;margin-top:18px}
+.list-heading>h2{flex:1 1 120px}
+#sync-status{margin:0;flex:0 1 auto}
+.item-actions,.dialog-actions,.list-footer{flex-wrap:wrap}
+.item-actions{max-width:100%}
+.dialog-actions>button{max-width:100%;white-space:normal}
+.dialog-heading h2{min-width:0}
+.dialog-heading .icon-button{flex-shrink:0}
+dialog{overflow-x:hidden;overflow-y:auto}
+.form-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+#toast{width:max-content;overflow-wrap:anywhere}
+#toast>span{min-width:0}
+@media(max-width:600px){
+ .page-header{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px}
+ .page-header>div{min-width:0}
+ .page-header #add{grid-column:1/-1;width:100%}
+ .summary{align-items:center}
+ .summary>div:first-child{flex:1}
+ .item-actions{gap:4px 12px}
+ .due-banner>div{min-width:0}
+ dialog{padding:18px}
+ .form-row{grid-template-columns:minmax(0,1fr)}
+ .auth-box{min-width:0}
+ .auth-box h2{overflow-wrap:anywhere}
+}
