@@ -6,7 +6,7 @@ import {client,listPlans,savePlan,deletePlans} from './api.js';
 import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan,dailyProgress} from './domain.js';
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={user:null,items:[],view:'all',mode:'login',busy:false,epoch:0,undo:null,alerts:false};
+const state={user:null,items:[],view:'today',mode:'login',busy:false,epoch:0,undo:null,alerts:false};
 let authBusy=false,toastTimer,resendUntil=0,refreshSequence=0;
 const sentAlerts=new Set();
 const refreshRequest=createRefreshRequest(listPlans);
