@@ -15,7 +15,14 @@ test('install manifest has valid icons, standalone scope and version',async()=>{
  const manifest=JSON.parse(await readFile(new URL('../public/manifest.webmanifest',import.meta.url),'utf8'));
  assert.equal(manifest.display,'standalone');assert.equal(manifest.start_url,'/');assert.equal(manifest.scope,'/');
  for(const icon of manifest.icons){const png=await readFile(new URL('../public'+icon.src,import.meta.url));assert.equal(png.subarray(1,4).toString(),'PNG');const size=Number(icon.sizes.split('x')[0]);assert.equal(png.readUInt32BE(16),size);assert.equal(png.readUInt32BE(20),size);}
- const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));assert.equal(pkg.version,'1.0.0');
+ const pkg=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
+ const lock=JSON.parse(await readFile(new URL('../package-lock.json',import.meta.url),'utf8'));
+ assert.equal(lock.version,pkg.version);assert.equal(lock.packages[''].version,pkg.version);
+ for(const file of ['index.html','offline.html','sw.js']){
+  const built=await readFile(new URL('../dist/'+file,import.meta.url),'utf8');
+  assert.ok(built.includes(pkg.version),`${file} must show the release version`);
+  assert.ok(!built.includes('__APP_VERSION__'),`${file} must not contain a version placeholder`);
+ }
 });
 test('service worker bypasses auth, database, writes and unknown resources',()=>{
  const {listeners}=environment();

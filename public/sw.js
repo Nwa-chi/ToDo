@@ -1,5 +1,5 @@
 // Cache only public interface files. Never cache sessions, API responses or plans.
-const CACHE='daymark-shell-1.0.0-__BUILD_ID__';
+const CACHE='daymark-shell-__APP_VERSION__-__BUILD_ID__';
 const ASSETS=['/offline.html','/app.js?v=__BUILD_ID__','/styles.css?v=__BUILD_ID__','/favicon.svg','/manifest.webmanifest','/icons/icon-192.png','/icons/icon-512.png','/icons/maskable-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);

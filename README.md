@@ -1,4 +1,4 @@
-# Daymark ToDo 1.0
+# Daymark ToDo 1.0.2
 
 Account-based task, event and occasion planner. The previous prototype was
 replaced; its code remains recoverable in Git history.
@@ -20,7 +20,11 @@ Cloudflare Pages Free is the selected replacement host. Follow
 The replacement deployment is pending the account connection; this does not
 change the Supabase project or migrate user data.
 
-## Version 1.0
+## Version 1.0.2
+
+See [1.0.2 release notes](docs/RELEASE-1.0.2.md) for the sign-in reliability and layout fixes.
+
+## Original 1.0 release
 
 Installable PWA with home-screen icons, an install guide, offline reconnect page,
 clear account errors, current-origin email redirects and refined mobile controls.

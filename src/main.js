@@ -1,7 +1,7 @@
 import {createRefreshRequest} from './refresh-request.js';
 import {enablePush,disablePush,restorePush,testPush} from './push.js';
 import {setupInstall} from './pwa.js';
-import {authErrorMessage} from './auth-errors.js';
+import {authErrorMessage,isSignedOutError} from './auth-errors.js';
 import {client,listPlans,savePlan,deletePlans} from './api.js';
 import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan,dailyProgress} from './domain.js';
 const $=s=>document.querySelector(s);
@@ -15,7 +15,16 @@ function cancelRefresh(){refreshSequence++;refreshRequest.cancel();refreshTask=n
 function preference(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
 document.documentElement.dataset.theme=preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
 $('#theme').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('daymark-theme',theme)}catch{}};
-function toast(message,undo=false){clearTimeout(toastTimer);$('#toast-text').textContent=message;$('#undo').hidden=!undo;$('#toast').hidden=false;toastTimer=setTimeout(()=>{$('#toast').hidden=true;state.undo=null},8000)}
+function toast(message,undo=false){
+  clearTimeout(toastTimer);$('#toast').hidden=true;$('#auth-notice').hidden=true;
+  if(!$('#auth').hidden){$('#auth-notice').textContent=message;$('#auth-notice').hidden=false;}
+  else{$('#toast-text').textContent=message;$('#undo').hidden=!undo;$('#toast').hidden=false;}
+  toastTimer=setTimeout(()=>{$('#toast').hidden=true;$('#auth-notice').hidden=true;state.undo=null},8000);
+}
+function showSessionError(){
+  if(state.user)toast('We couldn’t verify your sign-in. Your loaded plans are still shown. Please try again when your connection is restored.');
+  else $('#session-status').hidden=false;
+}
 function authMode(mode) {
   state.mode=mode;$('#auth-error').textContent='';$('#auth-step').hidden=!['register','verify'].includes(mode);$('#auth-step').textContent=mode==='verify'?'Step 2 of 2 · Verify your email':'Step 1 of 2 · Create your account';
   const verifying=['verify','recoveryverify'].includes(mode),updating=mode==='update';
@@ -35,6 +44,7 @@ function authMode(mode) {
 }
 function clearWorkspace(){
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
+  clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
 }
@@ -42,7 +52,8 @@ async function establishSession(){
   const epoch=state.epoch;
   const {data,error}=await client.auth.getUser();
   if(epoch!==state.epoch)return;
-  if(error){if(error.status===401||error.status===403)clearWorkspace();else toast('Could not verify your connection. Your saved plans have not been removed.');return}
+  if(error){if(isSignedOutError(error))clearWorkspace();else showSessionError();return}
+  $('#session-status').hidden=true;
   if(!data.user){clearWorkspace();return}
   if(!data.user.email_confirmed_at){clearWorkspace();authMode('verify');return}
   if(['recoveryverify','update'].includes(state.mode))return;
@@ -56,8 +67,12 @@ async function establishSession(){
 client.auth.onAuthStateChange((event)=>{
   if(event==='SIGNED_OUT'){clearWorkspace();authMode('login')}
   else if(event==='PASSWORD_RECOVERY'){clearWorkspace();authMode('update')}
-  else if(['SIGNED_IN','INITIAL_SESSION'].includes(event))setTimeout(()=>establishSession().catch(e=>toast(e.message)),0);
+  else if(['SIGNED_IN','INITIAL_SESSION'].includes(event))setTimeout(()=>establishSession().catch(()=>showSessionError()),0);
 });
+$('#retry-session').onclick=async()=>{
+  $('#retry-session').disabled=true;
+  try{await establishSession()}catch{showSessionError()}finally{$('#retry-session').disabled=false}
+};
 $('#switch-auth').onclick=()=>{if(!authBusy)authMode(state.mode==='login'?'register':'login')};
 $('#forgot').onclick=()=>{if(!authBusy)authMode('recover')};
 $('#verify-existing').onclick=()=>{if(!authBusy)authMode('verify')};

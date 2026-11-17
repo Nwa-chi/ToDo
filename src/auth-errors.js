@@ -1,3 +1,10 @@
+import {isAuthSessionMissingError} from '@supabase/supabase-js';
+
+// A fresh visit has no session. This is a normal signed-out state, not an outage.
+export function isSignedOutError(error) {
+  return isAuthSessionMissingError(error)||error?.status===401||error?.status===403;
+}
+
 export function authErrorMessage(error) {
   const message=error?.message||'',code=error?.code||'';
   if(/sending.*(confirmation|recovery|email)/i.test(message))return 'We couldn’t send your email code. The email service needs attention. Please try again later; changing your password here will not fix this.';
