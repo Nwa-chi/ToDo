@@ -1,16 +1,29 @@
 import {createRefreshRequest} from './refresh-request.js';
 import {enablePush,disablePush,restorePush,testPush} from './push.js';
+import {prepareReminderSound,signalReminder} from './reminder-signal.js';
 import {setupInstall} from './pwa.js';
 import {authErrorMessage,isSignedOutError} from './auth-errors.js';
-import {client,listPlans,savePlan,deletePlans} from './api.js';
+import {client,listPlans,savePlan,deleteOpenPlan,clearCompletedPlans,importPlans} from './api.js';
 import {localDate,overdue,displayDate,matchesView,filterItems,validatePlan,dailyProgress} from './domain.js';
+import {agendaTiming} from './agenda.js';
+import {setupScheduleImport} from './schedule-import.js';
+import {workShiftID} from './work-schedule.js';
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={user:null,items:[],view:'today',mode:'login',busy:false,epoch:0,undo:null,alerts:false};
+const clearDialog=$('#clear-completed');
+const clearForm=$('#clear-completed-form');
+const clearPlan=$('#clear-plan');
+const clearPhrase=$('#clear-phrase');
 let authBusy=false,toastTimer,resendUntil=0,refreshSequence=0;
-const sentAlerts=new Set();
+const sentAlerts=new Map();
 const refreshRequest=createRefreshRequest(listPlans);
 let refreshTask=null,lastRenderedDay='';
+let timingTimer;
+const closeScheduleImport=setupScheduleImport(saveImportedShifts,(count,total)=>{
+  const skipped=total-count;
+  toast(`${count} ${count===1?'shift':'shifts'} saved.${skipped?` ${skipped} already included.`:''}`);
+});
 function cancelRefresh(){refreshSequence++;refreshRequest.cancel();refreshTask=null;if($('#sync-status').textContent==='Syncing…')$('#sync-status').textContent='';$('#loading').hidden=true;$('#items').setAttribute('aria-busy','false');}
 function preference(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
 document.documentElement.dataset.theme=preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
@@ -43,6 +56,7 @@ function authMode(mode) {
   $('#forgot').hidden=mode!=='login';$('#resend').hidden=!verifying;
 }
 function clearWorkspace(){
+  closeScheduleImport();clearTimeout(timingTimer);clearDialog.close();resetClearCompleted();
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
@@ -57,7 +71,7 @@ async function establishSession(){
   if(!data.user){clearWorkspace();return}
   if(!data.user.email_confirmed_at){clearWorkspace();authMode('verify');return}
   if(['recoveryverify','update'].includes(state.mode))return;
-  if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear()}
+  if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear();clearDialog.close();resetClearCompleted()}
   state.user=data.user;$('#auth').hidden=true;$('#workspace').hidden=false;$('#account-email').textContent=data.user.email;
   await refresh();
   if(location.hash==='#invitations')openInvitations();
@@ -132,15 +146,48 @@ function dateLabel(t){
   if(t.due_at)return new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeStyle:'short'}).format(new Date(t.due_at));
   return t.due_date?new Intl.DateTimeFormat('en-GB',{dateStyle:'medium'}).format(new Date(t.due_date+'T12:00:00')):'No date';
 }
+function renderPlan(plan,open){
+  const owner=plan.user_id===state.user.id;
+  const title=escape(plan.title);
+  const time=plan.completed?NaN:Date.parse(plan.due_at);
+  return `<details class="item${plan.completed?' complete':''}${overdue(plan)?' overdue':''}" data-id="${plan.id}"${Number.isFinite(time)?` data-agenda-at="${time}"`:''}${open?' open':''}>
+    <summary class="item-title"><span class="agenda-label"><span class="agenda-arrow" aria-hidden="true"></span><span class="agenda-name">${title}</span></span></summary>
+    <div class="plan-detail">
+      ${plan.description?`<p class="item-desc">${escape(plan.description)}</p>`:''}
+      <div class="meta">${plan.collaborator_id?`<span class="chip">${owner?'Shared · Owner':'Shared · Read only'}</span>`:''}
+        <span class="chip">${escape(plan.kind)}</span><span class="chip${plan.priority==='high'?' high':''}">${escape(plan.priority)} priority</span>
+        <span class="chip">${escape(plan.category)}</span><span class="chip${overdue(plan)?' high':''}">${overdue(plan)?'Overdue · ':''}${escape(dateLabel(plan))}</span>
+        ${plan.duration_minutes?`<span class="chip">${plan.duration_minutes} min</span>`:''}
+      </div>
+      ${owner?`<label class="plan-completion"><input type="checkbox" data-complete ${plan.completed?'checked':''} aria-label="${plan.completed?'Reopen':'Complete'} ${title}">Completed</label>`:`<p class="fine plan-status">${plan.completed?'Completed':'Open'}</p>`}
+      <div class="item-actions">
+        ${owner?`<button data-edit class="link" aria-label="Edit ${title}">Edit</button>`:''}
+        <button data-share class="link" aria-label="Sharing for ${title}">${plan.collaborator_id?'Sharing':'Share'}</button>
+        ${owner?`<button data-delete class="link danger" aria-label="Delete ${title}">Delete</button>`:''}
+      </div>
+    </div>
+  </details>`;
+}
+
+function updateAgendaTiming(){
+  clearTimeout(timingTimer);
+  let next=Infinity;
+  const now=Date.now();
+  for(const card of document.querySelectorAll('#items [data-agenda-at]')){
+    const timing=agendaTiming(Number(card.dataset.agendaAt),now);
+    card.dataset.agendaColor=timing.color;
+    card.querySelector('summary').title=timing.label;
+    next=Math.min(next,timing.next);
+  }
+  if(Number.isFinite(next))timingTimer=setTimeout(updateAgendaTiming,Math.min(next-now,2_147_483_647));
+}
 function render(){
   lastRenderedDay=localDate();
   const currentFilters=filters();const items=filterItems(state.items,currentFilters);$('#reset-filters').hidden=!currentFilters.search&&currentFilters.kind==='all'&&currentFilters.priority==='all'&&currentFilters.category==='all';
   $('#result-count').textContent=String(items.length);
-  $('#items').innerHTML=items.map(t=>`<article class="item ${t.completed?'complete':''} ${overdue(t)?'overdue':''}" data-id="${t.id}">
-    <input type="checkbox" data-complete ${t.completed?'checked':''} aria-label="${escape((t.completed?'Reopen ':'Complete ')+t.title)}">
-    <div><div class="item-title">${escape(t.title)}</div>${t.description?`<p class="item-desc">${escape(t.description)}</p>`:''}
-    <div class="meta">${t.collaborator_id?`<span class="chip">Shared · ${t.user_id===state.user.id?'Owner':'Collaborator'}</span>`:''}<span class="chip">${escape(t.kind)}</span><span class="chip ${t.priority==='high'?'high':''}">${escape(t.priority)} priority</span><span class="chip">${escape(t.category)}</span><span class="chip ${overdue(t)?'high':''}">${overdue(t)?'Overdue · ':''}${escape(dateLabel(t))}</span>${t.duration_minutes?`<span class="chip">${t.duration_minutes} min</span>`:''}</div></div>
-    <div class="item-actions"><button data-edit class="link" aria-label="Edit ${escape(t.title)}">Edit</button><button data-share class="link" aria-label="Sharing for ${escape(t.title)}">${t.collaborator_id?'Sharing':'Share'}</button>${t.user_id===state.user.id?`<button data-delete class="link danger" aria-label="Delete ${escape(t.title)}">Delete</button>`:''}</div></article>`).join('');
+  const expanded=new Set([...$('#items').querySelectorAll('details[open]')].map(card=>card.dataset.id));
+  $('#items').innerHTML=items.map(plan=>renderPlan(plan,expanded.has(plan.id))).join('');
+  updateAgendaTiming();
   $('#empty-action').textContent=state.items.length?'Reset filters':'Add your first plan';
   $('#empty').hidden=items.length>0;$('#empty-title').textContent=state.items.length?'No matching plans':'A little space to begin';$('#empty-copy').textContent=state.items.length?'Try another filter or search.':'Add a task, event or occasion to your day.';
   const {complete,total,percent}=dailyProgress(state.items);
@@ -187,18 +234,38 @@ function refresh(){
   return refreshTask;
 }
 function lockControls(busy){
-  for(const element of document.querySelectorAll('#add,#rail-add,#join-plan,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
+  for(const element of document.querySelectorAll('#add,#open-schedule-import,#rail-add,#join-plan,#clear,#save,#undo,#refresh,#logout,#items button,#items input'))element.disabled=busy;
+  updateClearCompleted();
 }
-async function mutation(fn,success){
+async function mutation(fn,success,onError){
   if(state.busy||!state.user)return;
   if(!navigator.onLine){toast('You’re offline. Reconnect before saving changes.');render();return;}
   state.busy=true;lockControls(true);const epoch=state.epoch;cancelRefresh();
   try{await fn(epoch);if(epoch!==state.epoch)return;categories();render();if(success)toast(success)}
-  catch(e){if(epoch===state.epoch){render();$('#item-error').textContent=e.message;toast('Not saved: '+e.message)}}
+  catch(e){if(epoch===state.epoch){render();if(onError)onError(e);else{$('#item-error').textContent=e.message;toast('Not saved: '+e.message)}}}
   finally{state.busy=false;lockControls(false)}
 }
+
+async function saveImportedShifts(plans){
+  if(!state.user||state.busy)return;
+  if(!navigator.onLine)throw Error('Reconnect to save your shifts.');
+  const userID=state.user.id;
+  let count,error;
+  await mutation(async epoch=>{
+    const rows=await Promise.all(plans.map(async plan=>({...plan,id:await workShiftID(userID,plan.due_at)})));
+    if(epoch!==state.epoch)return;
+    const distinct=[...new Map(rows.map(row=>[row.id,row])).values()];
+    const saved=await importPlans(distinct);
+    if(epoch!==state.epoch)return;
+    const newIDs=new Set(saved.map(row=>row.id));
+    state.items=[...saved,...state.items.filter(row=>!newIDs.has(row.id))];
+    count=saved.length;
+  },undefined,e=>{error=e});
+  if(error)throw error;
+  return count;
+}
 function edit(item){
-  if(state.busy)return;
+  if(state.busy||(item&&item.user_id!==state.user?.id))return;
   $('#item-form').reset();$('#item-id').value=item?.id||'';$('#editor-title').textContent=item?'Edit plan':'Add a plan';$('#item-error').textContent='';
   $('#item-title').value=item?.title||'';$('#description').value=item?.description||'';$('#kind').value=item?.kind||'task';$('#priority').value=item?.priority||'medium';$('#category').value=item?.category||'Uncategorised';
   $('#due-date').value=item?displayDate(item):'';$('#end-date').value=item?.end_date||'';$('#due-time').value=item?.due_at?new Date(item.due_at).toTimeString().slice(0,5):'';$('#duration').value=item?.duration_minutes||'';
@@ -216,31 +283,105 @@ $('#item-form').onsubmit=async e=>{
   catch(e){$('#item-error').textContent=e.message;return}
   const id=$('#item-id').value;
   const previous=state.items.find(t=>t.id===id);
+  if(id&&previous?.user_id!==state.user?.id){$('#item-error').textContent='Only the owner can edit this plan.';return}
   if(previous&&previous.due_date===plan.due_date&&previous.due_at===plan.due_at)plan.reminder_at=previous.reminder_at;
   await mutation(async(epoch)=>{const saved=await savePlan(plan,id);if(epoch!==state.epoch)return;state.items=id?state.items.map(t=>t.id===id?saved:t):[saved,...state.items];$('#editor').close()},'Plan saved.');
 };
-async function confirmDelete(items){
-  $('#confirm-title').textContent=items.length===1?'Delete this plan?':'Clear completed plans?';
-  $('#confirm-copy').textContent=items.length===1?items[0].title:items.length+' completed plans will be removed.';
+function recordDeletion(items,message){
+  const ids=new Set(items.map(item=>item.id));
+  state.items=state.items.filter(item=>!ids.has(item.id));
+  state.undo={userId:state.user.id,items};
+  toast(message,true);
+}
+
+async function confirmDelete(item){
+  $('#confirm-copy').textContent=item.title;
   const dialog=$('#confirm');dialog.returnValue='cancel';dialog.showModal();
   const confirmed=await new Promise(resolve=>dialog.addEventListener('close',()=>resolve(dialog.returnValue==='yes'),{once:true}));
   if(!confirmed)return;
+  let changed=false;
   await mutation(async(epoch)=>{
-    const deleted=await deletePlans(items.map(t=>t.id));
+    const removed=await deleteOpenPlan(item.id);
     if(epoch!==state.epoch)return;
-    state.items=state.items.filter(t=>!deleted.includes(t.id));
-    state.undo={userId:state.user.id,items:items.filter(t=>deleted.includes(t.id))};
-    toast('Plans deleted.',true);
+    if(removed)recordDeletion([item],'Plan deleted.');
+    else{changed=true;toast('This plan changed before it could be deleted.')}
   });
+  if(changed)await refresh();
 }
+
+function resetClearCompleted(){
+  clearForm.reset();
+  clearPlan.replaceChildren(new Option('Choose a plan',''));
+  $('#clear-error').textContent='';
+}
+
+function updateClearCompleted(){
+  if(!clearDialog.open)return;
+  const all=clearForm.elements.scope.value==='all';
+  const count=clearPlan.options.length-1;
+  for(const input of clearForm.querySelectorAll('input,button'))input.disabled=state.busy;
+  $('#clear-plan-field').hidden=all;
+  clearPlan.disabled=all||state.busy;
+  $('#clear-scope-summary').hidden=!all;
+  $('#clear-scope-summary').textContent=all?`This will clear ${count} completed ${count===1?'plan':'plans'}.`:'';
+  $('#clear-submit').disabled=state.busy||clearPhrase.value!=='CLEAR'||(all?!count:!clearPlan.value);
+}
+
+function openClearCompleted(selectedId=''){
+  const plans=state.items.filter(item=>item.completed&&item.user_id===state.user?.id);
+  if(state.busy||!plans.length)return;
+  resetClearCompleted();
+  for(const plan of plans)clearPlan.add(new Option(plan.title+(displayDate(plan)?' · '+dateLabel(plan):''),plan.id));
+  clearPlan.value=selectedId;
+  if(clearPlan.selectedIndex<0)clearPlan.selectedIndex=0;
+  clearDialog.showModal();
+  updateClearCompleted();
+}
+
+clearForm.onchange=event=>{
+  if(event.target===clearPlan||event.target.name==='scope'){
+    clearPhrase.value='';
+    $('#clear-error').textContent='';
+    updateClearCompleted();
+  }
+};
+clearPhrase.oninput=updateClearCompleted;
+$('#clear-cancel').onclick=()=>clearDialog.close();
+clearDialog.onclose=()=>{if(!clearDialog.open)resetClearCompleted()};
+clearDialog.oncancel=event=>{if(state.busy)event.preventDefault()};
+clearForm.onsubmit=async event=>{
+  event.preventDefault();
+  if(state.busy||!clearDialog.open||clearPhrase.value!=='CLEAR')return;
+  const all=clearForm.elements.scope.value==='all';
+  const ids=all?[...clearPlan.options].map(option=>option.value).filter(Boolean):[clearPlan.value].filter(Boolean);
+  if(!ids.length)return;
+  if(!navigator.onLine){$('#clear-error').textContent='Reconnect to clear completed plans.';return}
+  $('#clear-error').textContent='';
+  let changed=false;
+  await mutation(async epoch=>{
+    const removed=await clearCompletedPlans(ids,clearPhrase.value);
+    if(epoch!==state.epoch)return;
+    clearDialog.close();
+    changed=removed.length<ids.length;
+    if(removed.length)recordDeletion(removed,`${removed.length} completed ${removed.length===1?'plan':'plans'} cleared.`);
+    else toast('No selected plans are still completed.');
+  },undefined,e=>{$('#clear-error').textContent=e.message});
+  if(changed)await refresh();
+};
+
 $('#items').onclick=async e=>{
-  const card=e.target.closest('[data-id]');if(!card||state.busy)return;const item=state.items.find(t=>t.id===card.dataset.id);
-  if(e.target.matches('[data-share]'))openSharing(item);
+  const card=e.target.closest('[data-id]');if(!card||state.busy)return;
+  const item=state.items.find(t=>t.id===card.dataset.id);if(!item)return;
+  if(e.target.matches('[data-share]')){openSharing(item);return}
+  if(item.user_id!==state.user?.id)return;
   if(e.target.matches('[data-edit]'))edit(item);
-  if(e.target.matches('[data-delete]'))await confirmDelete([item]);
+  if(e.target.matches('[data-delete]')){
+    if(item.completed)openClearCompleted(item.id);
+    else await confirmDelete(item);
+  }
   if(e.target.matches('[data-complete]'))await mutation(async(epoch)=>{const saved=await savePlan({completed:!item.completed},item.id);if(epoch!==state.epoch)return;state.items=state.items.map(t=>t.id===item.id?saved:t)},item.completed?'Plan reopened.':'Plan completed.');
 };
-$('#clear').onclick=()=>confirmDelete(state.items.filter(t=>t.completed&&t.user_id===state.user.id));
+$('#clear').onclick=()=>openClearCompleted();
 $('#undo').onclick=async()=>{
   const undo=state.undo;if(!undo||undo.userId!==state.user?.id)return;
   await mutation(async(epoch)=>{
@@ -255,15 +396,21 @@ for(const id of ['search','kind-filter','priority-filter','category-filter','sor
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 $('#alerts').onclick=async()=>{
+  if(!state.alerts)prepareReminderSound();
   $('#alerts').disabled=true;
   try{if(state.alerts){await disablePush();state.alerts=false;toast('Alerts disabled on this device.')}else{state.alerts=await enablePush();toast('Background alerts enabled on this device.')}}
   catch(e){toast(e.message)}finally{$('#alerts').disabled=false;$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}
 };
+document.addEventListener('click',()=>{if(state.alerts)prepareReminderSound()});
 setInterval(()=>{if(state.user&&!document.hidden)refresh()},30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state.user)refresh()});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&state.user){updateAgendaTiming();refresh()}
+});
 authMode('login');
 
-setupInstall(toast);
+setupInstall(toast,()=>!state.busy&&!authBusy&&!state.undo&&!location.hash&&!location.search.includes('code=')
+  &&!document.querySelector('dialog[open],input:focus,textarea:focus,select:focus')
+  &&(state.user||state.mode==='login'&&!$('#email').value&&!$('#password').value));
 function connectionStatus(){document.querySelector('#connection').hidden=navigator.onLine;if(navigator.onLine&&state.user)refresh()}
 addEventListener('online',connectionStatus);addEventListener('offline',connectionStatus);connectionStatus();
 for(const b of document.querySelectorAll('[data-about]'))b.onclick=()=>$('#about-dialog').showModal();
@@ -280,7 +427,7 @@ function openSharing(item=null){
  $('#invite-field').hidden=!!item;$('#share-copy').hidden=true;
  const owner=item?.user_id===state.user.id;
  $('#invite-email').value='';$('#invite-email-field').hidden=!owner||!!item?.collaborator_id;$('#invite-email').required=owner&&!item?.collaborator_id;$('#share-code').hidden=!owner||!!item?.collaborator_id;
- $('#sharing-copy').textContent=!item?'Enter the code from the plan owner. You’ll both be able to edit and complete it.':!owner?'You can edit and complete this shared plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. Remove access to stop sharing.':'Enter their verified Daymark account email. They’ll receive an invitation to accept or decline. Sending another invitation replaces the previous one.';
+ $('#sharing-copy').textContent=!item?'Enter the code from the owner to view their plan.':!owner?'Only the owner can change this plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. They can view it. Remove access to stop sharing.':'Enter their verified Daymark account email. They’ll receive an invitation to accept or decline. Sending another invitation replaces the previous one.';
  $('#share-submit').hidden=!!item?.collaborator_id;$('#share-submit').textContent=item?'Send invitation':'Link plan';
  $('#share-revoke').hidden=!item;$('#share-revoke').textContent=owner?'Revoke invitation / access':'Leave plan';
  $('#sharing').showModal();if(!item)$('#invite-code').focus();
@@ -311,14 +458,15 @@ function openNotifiedPlan(id){
  if($('#editor').open){toast('Save or close your current edit, then open the reminder.');return;}
  document.querySelector('[data-view="all"]').click();$('#search').value=item.title;render();
  const card=[...document.querySelectorAll('#items [data-id]')].find(c=>c.dataset.id===id);
- if(card){card.tabIndex=-1;card.focus({preventScroll:true});card.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
+ if(card){card.open=true;card.querySelector('summary').focus({preventScroll:true});card.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});}
  $('#due-banner').hidden=true;history.replaceState(null,'',location.pathname+location.search);
 }
 $('#due-open').onclick=()=>openNotifiedPlan(notifiedPlan);
 $('#due-dismiss').onclick=()=>{$('#due-banner').hidden=true};
 $('#test-alert').onclick=async()=>{
+ prepareReminderSound();
  $('#test-alert').disabled=true;
- try{if(!state.alerts){state.alerts=await enablePush();$('#alerts').textContent='Disable alerts';}await testPush();toast('Test alert requested on this device. Sound follows your device settings.');}
+ try{if(!state.alerts){state.alerts=await enablePush();$('#alerts').textContent='Disable alerts';}await testPush();signalReminder();toast('Test alert requested on this device. Device settings control background sound and vibration.');}
  catch(e){toast(e.message)}finally{$('#test-alert').disabled=false}
 };
 navigator.serviceWorker?.addEventListener('message',async event=>{
@@ -326,7 +474,10 @@ navigator.serviceWorker?.addEventListener('message',async event=>{
  const epoch=state.epoch;await refresh();if(epoch!==state.epoch)return;
  const item=state.items.find(t=>t.id===event.data.id);if(!item||item.completed)return;
  notifiedPlan=item.id;$('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
- if(event.data.type==='OPEN_PLAN')openNotifiedPlan(item.id);
+ if(event.data.type==='OPEN_PLAN'){openNotifiedPlan(item.id);return}
+ if(state.alerts&&item.reminder_at&&!document.hidden&&document.hasFocus()&&sentAlerts.get(item.id)!==item.reminder_at){
+  sentAlerts.set(item.id,item.reminder_at);signalReminder();
+ }
 });
 
 $('#open-menu').onclick=()=>setSidebar($('#workspace').classList.contains('sidebar-collapsed'));

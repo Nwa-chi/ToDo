@@ -27,4 +27,9 @@ test('entrypoint uses versioned assets that bypass older service-worker caches',
  const style=html.match(/href="(\/styles.css\?v=[a-f0-9]{16})"/)[1];
  for(const file of [script,style])assert.equal((await fetch(base+file)).status,200);
  const worker=await(await fetch(base+'/sw.js')).text();assert.ok(worker.includes(script));assert.ok(worker.includes(style));
+ const marker=await fetch(base+'/build.json');
+ assert.equal(marker.headers.get('cache-control'),'no-store');
+ const {id}=await marker.json();
+ assert.equal(id,script.split('=')[1]);
+ assert.ok(html.includes(`name="daymark-build" content="${id}"`));
 });

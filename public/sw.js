@@ -19,7 +19,7 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET'||url.origin!==self.location.origin)return;
   if(request.mode==='navigate'){
     // Respect the host's access check online. Offline displays no private records.
-    event.respondWith(fetch(request).catch(()=>caches.match('/offline.html')));return;
+    event.respondWith(fetch(request,{cache:'no-store'}).catch(()=>caches.match('/offline.html')));return;
   }
   if(!ASSETS.includes(url.pathname+url.search))return;
   event.respondWith(caches.match(request).then(cached=>cached||fetch(request)));

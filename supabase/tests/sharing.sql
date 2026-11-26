@@ -17,9 +17,10 @@ reset role;
 select set_config('request.jwt.claim.sub',(select id::text from fixtures where label='guest'),true);
 set local role authenticated;
 select public.daymark_share(null,'join',(select code from fixtures where label='plan'));
-update public.daymark_items set title='Edited by guest',completed=true where id=(select id from fixtures where label='plan');
 do $$ declare n int; begin
- if not exists(select 1 from public.daymark_items where title='Edited by guest' and completed) then raise exception 'TEST: guest edit failed'; end if;
+ if not exists(select 1 from public.daymark_items where id=(select id from fixtures where label='plan')) then raise exception 'TEST: guest could not read shared plan'; end if;
+ update public.daymark_items set title='Edited by guest',completed=true where id=(select id from fixtures where label='plan');get diagnostics n=row_count;
+ if n<>0 then raise exception 'TEST: guest edited shared plan'; end if;
  delete from public.daymark_items where id=(select id from fixtures where label='plan');get diagnostics n=row_count;
  if n<>0 then raise exception 'TEST: guest deleted plan'; end if;
  begin update public.daymark_items set collaborator_id=(select id from fixtures where label='third') where id=(select id from fixtures where label='plan');raise exception 'TEST: changed membership directly';exception when insufficient_privilege then null;end;
@@ -35,6 +36,10 @@ end $$;
 reset role;
 select set_config('request.jwt.claim.sub',(select id::text from fixtures where label='owner'),true);
 set local role authenticated;
+update public.daymark_items set title='Edited by owner',completed=true where id=(select id from fixtures where label='plan');
+do $$ begin
+ if not exists(select 1 from public.daymark_items where id=(select id from fixtures where label='plan') and title='Edited by owner' and completed) then raise exception 'TEST: owner could not edit shared plan'; end if;
+end $$;
 select public.daymark_share((select id from fixtures where label='plan'),'revoke');
 reset role;
 select set_config('request.jwt.claim.sub',(select id::text from fixtures where label='guest'),true);
@@ -43,5 +48,5 @@ do $$ begin
  if exists(select 1 from public.daymark_items where id=(select id from fixtures where label='plan')) then raise exception 'TEST: revoked guest can read';end if;
 end $$;
 reset role;
-select 'Sharing isolation, edit permissions, single-use invitation, revocation and worker isolation passed' as result;
+select 'Shared reads, owner-only edits, single-use invitation, revocation and worker isolation passed' as result;
 rollback;

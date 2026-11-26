@@ -2,12 +2,14 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { SUPABASE_URL } from './src/config.js';
+import { daymarkCSP,scheduleAssets } from './scripts/schedule-assets.mjs';
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
-const files = new Map([['/','index.html'],['/index.html','index.html'],['/app.js','app.js'],['/styles.css','styles.css'],['/favicon.svg','favicon.svg'],...['sw.js','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'].map(f=>['/'+f,f])]);
-const types = {'html':'text/html','js':'text/javascript','css':'text/css','svg':'image/svg+xml','png':'image/png','webmanifest':'application/manifest+json'};
+const files = new Map([['/','index.html'],['/index.html','index.html'],['/app.js','app.js'],['/styles.css','styles.css'],['/favicon.svg','favicon.svg'],...['build.json','sw.js','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'].map(f=>['/'+f,f])]);
+for(const name of Object.keys(scheduleAssets))files.set('/schedule/'+name,'schedule/'+name);
+const types = {'html':'text/html','js':'text/javascript','mjs':'text/javascript','css':'text/css','svg':'image/svg+xml','png':'image/png','webmanifest':'application/manifest+json','gz':'application/gzip','txt':'text/plain','json':'application/json'};
 export function createServer() {
   return http.createServer(async (req,res) => {
-    res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${SUPABASE_URL}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
+    res.setHeader('Content-Security-Policy', daymarkCSP(SUPABASE_URL));
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Referrer-Policy','no-referrer');

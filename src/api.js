@@ -19,8 +19,22 @@ export async function savePlan(plan, id) {
   if(error)throw error;
   return data;
 }
-export async function deletePlans(ids) {
-  const {data,error}=await client.from('daymark_items').delete().in('id',ids).select('id');
+export async function deleteOpenPlan(id) {
+  const {data,error}=await client.from('daymark_items').delete().eq('id',id).eq('completed',false).select('id');
   if(error)throw error;
-  return data.map(row=>row.id);
+  return data.length>0;
+}
+
+export async function clearCompletedPlans(ids,confirmation) {
+  const {data,error}=await client.rpc('daymark_clear_completed',{
+    p_plan_ids:ids,p_confirmation:confirmation
+  });
+  if(error)throw error;
+  return data;
+}
+
+export async function importPlans(plans) {
+  const {data,error}=await client.from('daymark_items').upsert(plans,{onConflict:'id',ignoreDuplicates:true}).select();
+  if(error)throw error;
+  return data;
 }

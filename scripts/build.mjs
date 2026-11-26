@@ -2,10 +2,13 @@ import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { scheduleAssets } from './schedule-assets.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const {version:releaseVersion}=JSON.parse(await readFile(root+'package.json','utf8'));
 await mkdir(root + 'dist', { recursive: true });
 await cp(root+'public/',root+'dist/',{recursive:true});
+await mkdir(root+'dist/schedule',{recursive:true});
+await Promise.all(Object.entries(scheduleAssets).map(([name,source])=>cp(root+'node_modules/'+source,root+'dist/schedule/'+name)));
 for(const page of ['index.html','offline.html']){
   const html=await readFile(root+'dist/'+page,'utf8');
   await writeFile(root+'dist/'+page,html.replaceAll('__APP_VERSION__',releaseVersion));
@@ -13,9 +16,10 @@ for(const page of ['index.html','offline.html']){
 await build({ absWorkingDir:root, entryPoints:['src/main.js'], outfile:'dist/app.js',
   bundle:true, minify:true, format:'esm', target:['es2022'], sourcemap:false });
 const hash=createHash('sha256');
-for(const name of ['app.js','index.html','styles.css','offline.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'])hash.update(await readFile(root+'dist/'+name));
+for(const name of ['app.js','index.html','styles.css','offline.html','sw.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/maskable-512.png'])hash.update(await readFile(root+'dist/'+name));
 const version=hash.digest('hex').slice(0,16);
-for(const page of ['index.html','offline.html']){const html=await readFile(root+'dist/'+page,'utf8');await writeFile(root+'dist/'+page,html.replaceAll('/app.js','/app.js?v='+version).replaceAll('/styles.css','/styles.css?v='+version));}
+for(const page of ['index.html','offline.html']){const html=await readFile(root+'dist/'+page,'utf8');await writeFile(root+'dist/'+page,html.replaceAll('__BUILD_ID__',version).replaceAll('/app.js','/app.js?v='+version).replaceAll('/styles.css','/styles.css?v='+version));}
+await writeFile(root+'dist/build.json',JSON.stringify({id:version}));
 const worker=await readFile(root+'public/sw.js','utf8');
 await writeFile(root+'dist/sw.js',worker.replaceAll('__BUILD_ID__',version).replaceAll('__APP_VERSION__',releaseVersion));
 console.log(`Daymark ${releaseVersion} build complete.`);

@@ -13,7 +13,11 @@
     "test:browser": "node tests/browser.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.116.0"
+    "@supabase/supabase-js": "2.116.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/nld": "1.0.0",
+    "pdfjs-dist": "6.5.438",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
