@@ -8,7 +8,7 @@ function environment(){
  const listeners={},cached=new Map(),network=[];
  const self={location:{origin:'https://daymark.test'},addEventListener:(name,fn)=>listeners[name]=fn,clients:{claim:async()=>{},matchAll:async()=>[]},skipWaiting:()=>{}};
  const cache={put:async(k,v)=>cached.set(k,v),match:async k=>cached.get(k)};
- const context={self,URL,Request,Error,caches:{open:async()=>cache,match:async r=>cached.get(typeof r==='string'?r:r.url),keys:async()=>[],delete:async()=>true},fetch:async r=>{network.push(r);return new Response('online')}};
+ const context={self,URL,Request,Response,AbortController,setTimeout,clearTimeout,Error,caches:{open:async()=>cache,match:async r=>cached.get(typeof r==='string'?r:r.url),keys:async()=>[],delete:async()=>true},fetch:async r=>{network.push(r);return new Response('online')}};
  vm.runInNewContext(worker,context);return{listeners,cached,network,context};
 }
 test('install manifest has valid icons, standalone scope and version',async()=>{
@@ -36,6 +36,26 @@ test('online navigation uses host access checks; offline returns only fallback',
  listeners.fetch(event);assert.equal(await(await response).text(),'online');
  context.fetch=async()=>{throw Error('offline')};listeners.fetch(event);assert.equal(await(await response).text(),'offline interface');
 });
+test('notification worker installs when the host redirects offline.html or assets fail',async()=>{
+ const {listeners,cached,context}=environment();
+ context.fetch=async request=>{
+  const path=new URL(request.url).pathname;
+  if(path==='/offline.html'){
+   const response=new Response('offline page');
+   Object.defineProperties(response,{redirected:{value:true},url:{value:'https://daymark.test/offline'}});
+   return response;
+  }
+  if(path==='/app.js')throw Error('temporary network failure');
+  return new Response('asset');
+ };
+ let installed;
+ listeners.install({waitUntil:p=>installed=p});
+ await installed;
+ const offline=cached.get('/offline.html');
+ assert.equal(await offline.text(),'offline page');
+ assert.equal(offline.redirected,false);
+ assert.equal([...cached.keys()].some(path=>path.startsWith('/app.js')),false);
+});
 test('email-delivery errors explain service failure without claiming success',()=>{
  assert.match(authErrorMessage({message:'Error sending confirmation email'}),/couldn’t send/);
  assert.match(authErrorMessage({code:'email_not_confirmed'}),/Verify your email/);
@@ -57,6 +77,25 @@ test('strong alerts request vibration and persistence with graceful fallback',as
  assert.equal(calls[0].requireInteraction,true);assert.equal(calls[0].silent,false);assert.equal(calls[0].renotify,true);
  assert.equal(calls[0].actions[0].action,'open');assert.ok(calls[0].vibrate.length>0);
  assert.equal(calls.length,2);assert.equal(calls[1].data.planId,'plan-id');
+});
+test('agenda reminders have separate notification tags and open the same plan',async()=>{
+ const {listeners,context}=environment();
+ const id='00000000-0000-4000-8000-000000000001';
+ const expected={green:'3 hours',yellow:'1 hour',red:'10 minutes'};
+ let shown,delivered,done;
+ context.self.registration={showNotification:async(title,options)=>shown={title,options}};
+ context.self.clients.matchAll=async()=>[{url:'https://daymark.test/',postMessage:message=>delivered=message}];
+ for(const [stage,time] of Object.entries(expected)){
+  const tag=id+':'+stage;
+  listeners.push({data:{json:()=>({kind:'reminder',tag})},waitUntil:p=>done=p});
+  await done;
+  assert.equal(shown.title,'Daymark · Plan starts in '+time);
+  assert.equal(shown.options.tag,tag);
+  assert.equal(shown.options.data.planId,id);
+  assert.equal(shown.options.silent,false);
+  assert.equal(delivered.id,id);
+  assert.equal(delivered.stage,stage);
+ }
 });
 test('dismiss does not open a window; clicking targets the plan without navigating an open editor',async()=>{
  const {listeners,context}=environment();let closed=false,focused=false,message,done,opened;

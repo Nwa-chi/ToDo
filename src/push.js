@@ -1,8 +1,32 @@
 import {client} from './api.js';
+import {registerDaymarkWorker} from './pwa.js';
 async function settings(params={}){const {data,error}=await client.rpc('daymark_push_settings',params);if(error)throw error;return data;}
 async function registration(){
  if(!('serviceWorker'in navigator)||!('PushManager'in window))throw Error('Install Daymark on your Home Screen and open it there, or use a browser with push support.');
- return Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(Error('The app is still updating. Reload and try again.')),12000))]);
+ const registered=await registerDaymarkWorker().catch(()=>{
+  throw Error('Daymark couldn’t start notifications. Reopen the app online and try again.');
+ });
+ if(registered.active)return registered;
+ let timeout;
+ try{
+  return await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>{
+   timeout=setTimeout(()=>reject(Error('Daymark’s notification worker did not start. Close and reopen the app while online.')),12000);
+  })]);
+ }finally{clearTimeout(timeout)}
+}
+async function saveSubscription(reg,subscription){
+ const channel=new MessageChannel();
+ let timeout;
+ try{
+  const version=await new Promise(resolve=>{
+   timeout=setTimeout(()=>resolve(null),1000);
+   channel.port1.onmessage=event=>resolve(event.data);
+   reg.active.postMessage({type:'DAYMARK_PUSH_VERSION'},[channel.port2]);
+  });
+  const data=subscription.toJSON();
+  if(version===1)data.daymark_timing=1;
+  await settings({p_subscription:data});
+ }finally{clearTimeout(timeout);channel.port1.close()}
 }
 export async function enablePush(){
  if(!('Notification'in window))throw Error('Install Daymark on your Home Screen to enable notifications on this device.');
@@ -11,12 +35,12 @@ export async function enablePush(){
  const reg=await registration(),key=await settings();
  const bytes=Uint8Array.from(atob(key.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
  const subscription=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes});
- await settings({p_subscription:subscription.toJSON()});return true;
+ await saveSubscription(reg,subscription);return true;
 }
 export async function restorePush(){
  if(!('serviceWorker'in navigator)||!('PushManager'in window)||Notification.permission!=='granted')return false;
  const reg=await registration(),subscription=await reg.pushManager.getSubscription();
- if(!subscription)return false;await settings({p_subscription:subscription.toJSON()});return true;
+ if(!subscription)return false;await saveSubscription(reg,subscription);return true;
 }
 export async function disablePush(){
  if(!('serviceWorker'in navigator)||!('PushManager'in window))return;
@@ -24,8 +48,11 @@ export async function disablePush(){
  if(subscription){await settings({p_remove:subscription.endpoint});await subscription.unsubscribe();}
 }
 
-export async function testPush(){
+export async function showTestNotification(){
  const reg=await registration();
  if(!reg.active)throw Error('Reload Daymark to finish its update, then test again.');
- reg.active.postMessage({type:'TEST_ALERT'});
+ await reg.showNotification('Daymark · Test alert',{
+  body:'This is a test of your agenda reminders.',
+  icon:'/icons/icon-192.png',tag:'daymark-test',renotify:true,silent:false
+ });
 }

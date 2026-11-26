@@ -1,5 +1,5 @@
 import {createRefreshRequest} from './refresh-request.js';
-import {enablePush,disablePush,restorePush,testPush} from './push.js';
+import {enablePush,disablePush,restorePush,showTestNotification} from './push.js';
 import {prepareReminderSound,signalReminder} from './reminder-signal.js';
 import {setupInstall} from './pwa.js';
 import {authErrorMessage,isSignedOutError} from './auth-errors.js';
@@ -60,7 +60,7 @@ function clearWorkspace(){
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
-  $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';
+  $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';$('#alert-error').textContent='';
 }
 async function establishSession(){
   const epoch=state.epoch;
@@ -395,12 +395,23 @@ $('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!bu
 for(const id of ['search','kind-filter','priority-filter','category-filter','sort'])$('#'+id).addEventListener(id==='search'?'input':'change',render);
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
-$('#alerts').onclick=async()=>{
-  if(!state.alerts)prepareReminderSound();
-  $('#alerts').disabled=true;
-  try{if(state.alerts){await disablePush();state.alerts=false;toast('Alerts disabled on this device.')}else{state.alerts=await enablePush();toast('Background alerts enabled on this device.')}}
-  catch(e){toast(e.message)}finally{$('#alerts').disabled=false;$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}
-};
+async function runAlertAction(action){
+  const toggle=$('#alerts'),test=$('#test-alert'),error=$('#alert-error');
+  if(toggle.disabled)return;
+  toggle.disabled=test.disabled=true;
+  error.textContent='';
+  try{await action()}
+  catch(e){error.textContent=e.message}
+  finally{
+    toggle.textContent=state.alerts?'Disable alerts':'Enable alerts';
+    toggle.disabled=test.disabled=false;
+  }
+}
+$('#alerts').onclick=()=>runAlertAction(async()=>{
+  if(state.alerts){await disablePush();state.alerts=false;return}
+  prepareReminderSound();
+  state.alerts=await enablePush();
+});
 document.addEventListener('click',()=>{if(state.alerts)prepareReminderSound()});
 setInterval(()=>{if(state.user&&!document.hidden)refresh()},30000);
 document.addEventListener('visibilitychange',()=>{
@@ -463,20 +474,23 @@ function openNotifiedPlan(id){
 }
 $('#due-open').onclick=()=>openNotifiedPlan(notifiedPlan);
 $('#due-dismiss').onclick=()=>{$('#due-banner').hidden=true};
-$('#test-alert').onclick=async()=>{
+$('#test-alert').onclick=()=>runAlertAction(async()=>{
  prepareReminderSound();
- $('#test-alert').disabled=true;
- try{if(!state.alerts){state.alerts=await enablePush();$('#alerts').textContent='Disable alerts';}await testPush();signalReminder();toast('Test alert requested on this device. Device settings control background sound and vibration.');}
- catch(e){toast(e.message)}finally{$('#test-alert').disabled=false}
-};
+ if(!state.alerts)state.alerts=await enablePush();
+ await showTestNotification();
+ signalReminder();
+});
 navigator.serviceWorker?.addEventListener('message',async event=>{
  if(!['PLAN_DUE','OPEN_PLAN'].includes(event.data?.type)||!state.user)return;
  const epoch=state.epoch;await refresh();if(epoch!==state.epoch)return;
  const item=state.items.find(t=>t.id===event.data.id);if(!item||item.completed)return;
- notifiedPlan=item.id;$('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
+ notifiedPlan=item.id;
+ $('#due-banner strong').textContent=event.data.title||'Plan due now';
+ $('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
  if(event.data.type==='OPEN_PLAN'){openNotifiedPlan(item.id);return}
- if(state.alerts&&item.reminder_at&&!document.hidden&&document.hasFocus()&&sentAlerts.get(item.id)!==item.reminder_at){
-  sentAlerts.set(item.id,item.reminder_at);signalReminder();
+ const key=item.id+':'+(event.data.stage||'due');
+ if(state.alerts&&item.reminder_at&&!document.hidden&&document.hasFocus()&&sentAlerts.get(key)!==item.reminder_at){
+  sentAlerts.set(key,item.reminder_at);signalReminder();
  }
 });
 

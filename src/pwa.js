@@ -1,3 +1,13 @@
+let workerRegistration;
+
+export function registerDaymarkWorker(){
+  workerRegistration??=navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).catch(error=>{
+    workerRegistration=undefined;
+    throw error;
+  });
+  return workerRegistration;
+}
+
 export function setupInstall(toast,canReload) {
   let prompt;
   const buttons=[...document.querySelectorAll('[data-install]')];
@@ -49,7 +59,7 @@ function setupUpdates(canReload){
     notice.hidden=false;
   };
   if(worker){
-    worker.register('/sw.js',{updateViaCache:'none'}).then(registered=>{
+    registerDaymarkWorker().then(registered=>{
       registration=registered;
       offer();
       registered.addEventListener('updatefound',()=>registered.installing?.addEventListener('statechange',offer));

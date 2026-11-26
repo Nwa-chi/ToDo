@@ -43,7 +43,7 @@ try{
  const encode=o=>Buffer.from(JSON.stringify(o)).toString('base64url');
  const token=encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',aud:'authenticated'})+'.test-signature';
  const session={access_token:token,token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,refresh_token:'test-refresh',user};
- let rows=[],writes=0,clearWrites=0,planReadStatus=200;
+ let rows=[],writes=0,clearWrites=0,planReadStatus=200,notificationRegistrations=0;
  await page.route('https://uolwbaappjrggtaydvsq.supabase.co/**',async route=>{
    const request=route.request(),url=new URL(request.url()),method=request.method();
    const respond=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -82,6 +82,12 @@ try{
      return respond(removed);
    }
    if(url.pathname==='/rest/v1/rpc/daymark_invitation')return respond([]);
+   if(url.pathname==='/rest/v1/rpc/daymark_push_settings'){
+     const {p_subscription:subscription,p_remove:remove}=request.postDataJSON();
+     if(subscription){notificationRegistrations++;return respond('enabled');}
+     if(remove)return respond('removed');
+     return respond(Buffer.alloc(65,1).toString('base64url'));
+   }
    return respond({message:'Unexpected test endpoint'},404);
  });
  await page.goto(base);
@@ -287,6 +293,39 @@ try{
  }
  await page.getByRole('button',{name:'Invitations',exact:true}).click();
  await page.locator('#invitations-panel').getByRole('button',{name:'Close invitations'}).click();
+ await page.locator('.icon-rail [data-panel="settings-panel"]').click();
+ const alertSettings=page.getByRole('dialog',{name:'Settings',exact:true});
+ await alertSettings.locator('.notification-heading svg').waitFor();
+ await page.context().grantPermissions(['notifications'],{origin:base});
+ await page.evaluate(()=>{
+   // Headless Chromium has no system notification tray. Check the call at the browser API.
+   window.testDeviceNotifications=[];
+   ServiceWorkerRegistration.prototype.showNotification=async function(title,options){
+     window.testDeviceNotifications.push({title,tag:options.tag,active:!!this.active});
+   };
+   let subscription=null;
+   const endpoint='https://fcm.googleapis.com/fcm/send/daymark-test';
+   PushManager.prototype.getSubscription=async()=>subscription;
+   PushManager.prototype.subscribe=async()=>{
+     subscription={endpoint,toJSON:()=>({endpoint,keys:{p256dh:'test-key',auth:'test-secret'}}),
+       unsubscribe:async()=>{subscription=null;return true;}};
+     return subscription;
+   };
+ });
+ await alertSettings.getByRole('button',{name:'Test alert',exact:true}).click();
+ await alertSettings.getByRole('button',{name:'Disable alerts',exact:true}).waitFor();
+ assert.equal(notificationRegistrations,1,'Test alert registers this device for scheduled reminders');
+ assert.deepEqual(await page.evaluate(()=>window.testDeviceNotifications),[
+   {title:'Daymark · Test alert',tag:'daymark-test',active:true}
+ ]);
+ await alertSettings.getByRole('button',{name:'Disable alerts',exact:true}).click();
+ await alertSettings.getByRole('button',{name:'Enable alerts',exact:true}).waitFor();
+ await page.evaluate(()=>{
+   Notification.requestPermission=async()=> 'denied';
+ });
+ await alertSettings.getByRole('button',{name:'Test alert',exact:true}).click();
+ await alertSettings.getByRole('alert').filter({hasText:'Allow notifications in your device settings'}).waitFor();
+ await alertSettings.getByRole('button',{name:'Close settings'}).click();
  await page.locator('#close-sidebar').click();
  assert.equal(await page.locator('#daymark-sidebar').isVisible(),false);
  assert.equal(await page.locator('#open-menu').getAttribute('aria-expanded'),'false');
