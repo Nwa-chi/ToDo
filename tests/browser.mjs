@@ -232,8 +232,21 @@ try{
  await shared.locator('.item-title').click();
  assert.equal(await shared.locator('.item-desc').isVisible(),false);
  await page.screenshot({path:'test-results/desktop.png',fullPage:true});
- await page.setViewportSize({width:390,height:844});
- assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile overflow');
+ for(const width of [320,390]){
+   await page.setViewportSize({width,height:844});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile overflow');
+   const actions=await page.locator('.plan-create button').evaluateAll(buttons=>buttons.map(button=>{
+     const bounds=button.getBoundingClientRect();
+     const icon=button.querySelector('svg').getBoundingClientRect();
+     const label=button.querySelector('span').getBoundingClientRect();
+     return {label:button.textContent.trim(),width:bounds.width,height:bounds.height,top:bounds.top,iconTop:icon.top,iconAbove:icon.bottom<label.top};
+   }));
+   assert.deepEqual(actions.map(action=>action.label),['Import schedule','Add plan']);
+   assert.equal(actions[0].top,actions[1].top);
+   assert.equal(actions[0].width,actions[1].width);
+   assert.equal(actions[0].iconTop,actions[1].iconTop);
+   assert.ok(actions.every(action=>action.height>=44&&action.width<width/2&&action.iconAbove));
+ }
  await page.locator('#close-sidebar').click();
  assert.equal(await page.locator('#daymark-sidebar').isVisible(),false);
  assert.equal(await page.locator('#open-menu').getAttribute('aria-expanded'),'false');
