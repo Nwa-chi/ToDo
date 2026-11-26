@@ -330,6 +330,28 @@ try{
  await page.locator('.icon-rail [data-panel="settings-panel"]').click();
  const alertSettings=page.getByRole('dialog',{name:'Settings',exact:true});
  await alertSettings.locator('.notification-heading svg').waitFor();
+ assert.deepEqual(await alertSettings.getByRole('heading', {level:3}).allTextContents()
+   .then(labels=>labels.map(label=>label.trim())),['Appearance','Notifications','App']);
+ const theme=alertSettings.locator('#theme-current');
+ const initialTheme=await theme.textContent();
+ await alertSettings.getByRole('button',{name:'Switch theme'}).click();
+ assert.notEqual(await theme.textContent(),initialTheme);
+ await alertSettings.getByRole('button',{name:'Switch theme'}).click();
+ const reminderDetails=alertSettings.locator('.settings-details');
+ const showReminderDetails=alertSettings.getByText('Reminder timing and sound',{exact:true});
+ assert.equal(await reminderDetails.locator('p').first().isVisible(),false);
+ await showReminderDetails.click();
+ assert.equal(await reminderDetails.locator('p').first().isVisible(),true);
+ await showReminderDetails.click();
+ assert.equal(await reminderDetails.locator('p').first().isVisible(),false);
+ await page.setViewportSize({width:320,height:580});
+ assert.equal(await alertSettings.evaluate(dialog=>dialog.scrollWidth>dialog.clientWidth),false,'settings overflow at 320px');
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await alertSettings.locator('#alert-status').textContent(),'Alerts off');
+ if(process.env.DAYMARK_SETTINGS_QA){
+   if((await theme.textContent())==='Light theme')await alertSettings.getByRole('button',{name:'Switch theme'}).click();
+   await alertSettings.screenshot({path:'test-results/settings.png'});
+ }
  await page.context().grantPermissions(['notifications'],{origin:base});
  await page.evaluate(()=>{
    // Headless Chromium has no system notification tray. Check the call at the browser API.
@@ -348,12 +370,14 @@ try{
  });
  await alertSettings.getByRole('button',{name:'Test alert',exact:true}).click();
  await alertSettings.getByRole('button',{name:'Disable alerts',exact:true}).waitFor();
+ assert.equal(await alertSettings.locator('#alert-status').textContent(),'Alerts on');
  assert.equal(notificationRegistrations,1,'Test alert registers this device for scheduled reminders');
  assert.deepEqual(await page.evaluate(()=>window.testDeviceNotifications),[
    {title:'Daymark · Test alert',tag:'daymark-test',active:true}
  ]);
  await alertSettings.getByRole('button',{name:'Disable alerts',exact:true}).click();
  await alertSettings.getByRole('button',{name:'Enable alerts',exact:true}).waitFor();
+ assert.equal(await alertSettings.locator('#alert-status').textContent(),'Alerts off');
  await page.evaluate(()=>{
    Notification.requestPermission=async()=> 'denied';
  });

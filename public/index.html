@@ -78,7 +78,53 @@
 
   <dialog id="menu-panel" class="menu-panel" aria-labelledby="menu-title"><div class="dialog-heading"><h2 id="menu-title">Daymark</h2><button class="icon-button" data-close-dialog aria-label="Close menu">×</button></div><nav class="drawer-nav" aria-label="Mobile navigation"><button data-mobile-view="today">Today</button><button data-mobile-view="upcoming">Upcoming</button><button data-mobile-view="overdue">Overdue</button><button data-mobile-view="completed">Completed</button><button data-mobile-view="all">All plans</button><hr><button data-panel="profile-panel">Profile</button><button data-panel="settings-panel">Settings</button><button data-panel="email-panel">Email</button><button id="mobile-link">Link a plan</button></nav></dialog>
   <dialog id="profile-panel" aria-labelledby="profile-title"><div class="dialog-heading"><h2 id="profile-title">Your profile</h2><button class="icon-button" data-close-dialog aria-label="Close profile">×</button></div><p class="muted">Your Daymark account</p><label>Email address<p id="account-email" class="account-value"></p></label><p id="profile-since" class="fine"></p><button id="logout" class="secondary">Sign out</button></dialog>
-  <dialog id="settings-panel" aria-labelledby="settings-title"><div class="dialog-heading"><h2 id="settings-title">Settings</h2><button class="icon-button" data-close-dialog aria-label="Close settings">×</button></div><section class="settings-group"><h3>Appearance</h3><button id="theme" class="secondary">Switch theme</button></section><section class="settings-group" aria-labelledby="notification-settings-title"><h3 id="notification-settings-title" class="notification-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9M10 21h4"/></svg>Notifications</h3><button id="alerts" class="link">Enable alerts</button><button id="test-alert" class="link">Test alert</button><p id="alert-error" class="error" role="alert"></p><p class="fine">Timed plans alert 3 hours, 1 hour, and 10 minutes before the start, and again at the start. Any advance reminder you set is also sent. Date-only plans remind at 09:00. Use Test alert to check that your device can display a notification. Sound and vibration depend on your device settings.</p></section><section class="settings-group"><h3>App</h3><button class="secondary" data-install>Install Daymark</button><p class="fine">Version __APP_VERSION__</p><button type="button" class="link" id="check-update">Check for updates</button><p id="update-status" role="status" class="fine"></p></section></dialog>
+  <dialog id="settings-panel" aria-labelledby="settings-title">
+    <div class="dialog-heading">
+      <h2 id="settings-title">Settings</h2>
+      <button type="button" class="icon-button" data-close-dialog aria-label="Close settings">×</button>
+    </div>
+    <div class="settings-cards">
+      <section class="settings-card" aria-labelledby="appearance-settings-title">
+        <div class="settings-row">
+          <div>
+            <h3 id="appearance-settings-title">Appearance</h3>
+            <p id="theme-current" class="settings-caption"></p>
+          </div>
+          <button type="button" id="theme" class="secondary">Switch theme</button>
+        </div>
+      </section>
+      <section class="settings-card" aria-labelledby="notification-settings-title">
+        <div class="settings-row">
+          <h3 id="notification-settings-title" class="notification-heading">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9M10 21h4"/></svg>
+            Notifications
+          </h3>
+          <span id="alert-status" class="settings-status" role="status">Alerts off</span>
+        </div>
+        <div class="settings-actions">
+          <button type="button" id="alerts" class="secondary settings-enable">Enable alerts</button>
+          <button type="button" id="test-alert" class="secondary">Test alert</button>
+        </div>
+        <p id="alert-error" class="error" role="alert"></p>
+        <details class="settings-details">
+          <summary>Reminder timing and sound</summary>
+          <p id="reminder-help">Timed plans alert 3 hours, 1 hour, and 10 minutes before the start, and again at the start. Daymark also sends any advance reminder you set. Date-only plans remind at 09:00.</p>
+          <p>Use Test alert to check this device. Sound and vibration follow your device settings.</p>
+        </details>
+      </section>
+      <section class="settings-card" aria-labelledby="app-settings-title">
+        <div class="settings-row">
+          <div>
+            <h3 id="app-settings-title">App</h3>
+            <p class="settings-caption">Version __APP_VERSION__</p>
+          </div>
+          <button type="button" class="secondary" id="check-update">Check for updates</button>
+        </div>
+        <button type="button" class="link settings-install" data-install>Install Daymark</button>
+        <p id="update-status" role="status" class="settings-caption"></p>
+      </section>
+    </div>
+  </dialog>
   <dialog id="email-panel" aria-labelledby="email-title"><div class="dialog-heading"><h2 id="email-title">Account email</h2><button class="icon-button" data-close-dialog aria-label="Close email details">×</button></div><p id="email-address" class="account-value"></p><p class="chip">Verified email</p><p class="muted">This is the address used to sign in and receive verification and password-reset emails. Plan reminders are delivered as device notifications.</p><button id="copy-email" class="secondary">Copy email address</button></dialog>
 <dialog id="search-panel" class="menu-panel search-panel" aria-labelledby="search-title"><div class="dialog-heading"><h2 id="search-title">Find plans</h2><button class="icon-button" data-close-dialog aria-label="Close search">×</button></div>        <section class="controls" aria-label="Filter plans">
           <label class="search-label"><span>Search</span><input id="search" type="search" placeholder="Search your plans…"></label>

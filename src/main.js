@@ -27,8 +27,16 @@ const closeScheduleImport=setupScheduleImport(saveImportedShifts,(count,total)=>
 });
 function cancelRefresh(){refreshSequence++;refreshRequest.cancel();refreshTask=null;if($('#sync-status').textContent==='Syncing…')$('#sync-status').textContent='';$('#loading').hidden=true;$('#items').setAttribute('aria-busy','false');}
 function preference(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
-document.documentElement.dataset.theme=preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-$('#theme').onclick=()=>{const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('daymark-theme',theme)}catch{}};
+function showTheme(theme){
+  document.documentElement.dataset.theme=theme;
+  $('#theme-current').textContent=theme==='dark'?'Dark theme':'Light theme';
+}
+showTheme(preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
+$('#theme').onclick=()=>{
+  const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  showTheme(theme);
+  try{localStorage.setItem('daymark-theme',theme)}catch{}
+};
 function toast(message,undo=false){
   clearTimeout(toastTimer);$('#toast').hidden=true;$('#auth-notice').hidden=true;
   if(!$('#auth').hidden){$('#auth-notice').textContent=message;$('#auth-notice').hidden=false;}
@@ -61,7 +69,7 @@ function clearWorkspace(){
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#group-link').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
-  $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';$('#alert-error').textContent='';
+  $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();showAlertSettings();$('#alert-error').textContent='';
 }
 async function establishSession(){
   const epoch=state.epoch;
@@ -78,7 +86,8 @@ async function establishSession(){
   routePlanLink();
   if(location.hash==='#invitations')openInvitations();
   if(location.hash.startsWith('#plan='))openNotifiedPlan(location.hash.slice(6));
-  try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
+  try{state.alerts=await restorePush()}catch{state.alerts=false}
+  showAlertSettings();
   schedulePlanRingtones();
 }
 client.auth.onAuthStateChange((event)=>{
@@ -424,6 +433,14 @@ $('#navigation').onclick=e=>{const button=e.target.closest('[data-view]');if(!bu
 for(const id of ['search','kind-filter','priority-filter','category-filter','sort'])$('#'+id).addEventListener(id==='search'?'input':'change',render);
 $('#refresh').onclick=()=>refresh();
 $('#today-label').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
+function showAlertSettings(){
+  const toggle=$('#alerts'),status=$('#alert-status');
+  toggle.textContent=state.alerts?'Disable alerts':'Enable alerts';
+  toggle.classList.toggle('settings-enable',!state.alerts);
+  status.textContent=state.alerts?'Alerts on':'Alerts off';
+  status.toggleAttribute('data-enabled',state.alerts);
+}
+showAlertSettings();
 async function runAlertAction(action){
   const toggle=$('#alerts'),test=$('#test-alert'),error=$('#alert-error');
   if(toggle.disabled)return;
@@ -432,7 +449,7 @@ async function runAlertAction(action){
   try{await action()}
   catch(e){error.textContent=e.message}
   finally{
-    toggle.textContent=state.alerts?'Disable alerts':'Enable alerts';
+    showAlertSettings();
     toggle.disabled=test.disabled=false;
     schedulePlanRingtones();
   }
