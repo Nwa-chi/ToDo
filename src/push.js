@@ -24,7 +24,7 @@ async function saveSubscription(reg,subscription){
    reg.active.postMessage({type:'DAYMARK_PUSH_VERSION'},[channel.port2]);
   });
   const data=subscription.toJSON();
-  if(version===1)data.daymark_timing=1;
+  if(version===1||version===2)data.daymark_timing=version;
   await settings({p_subscription:data});
  }finally{clearTimeout(timeout);channel.port1.close()}
 }

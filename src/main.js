@@ -1,3 +1,4 @@
+import {advanceReminder,localDateTime,planTone} from './plan-reminders.js';
 import {createRefreshRequest} from './refresh-request.js';
 import {enablePush,disablePush,restorePush,showTestNotification} from './push.js';
 import {prepareReminderSound,signalReminder} from './reminder-signal.js';
@@ -19,7 +20,7 @@ let authBusy=false,toastTimer,resendUntil=0,refreshSequence=0;
 const sentAlerts=new Map();
 const refreshRequest=createRefreshRequest(listPlans);
 let refreshTask=null,lastRenderedDay='';
-let timingTimer;
+let timingTimer, reminderTimer, foregroundSince=Date.now();
 const closeScheduleImport=setupScheduleImport(saveImportedShifts,(count,total)=>{
   const skipped=total-count;
   toast(`${count} ${count===1?'shift':'shifts'} saved.${skipped?` ${skipped} already included.`:''}`);
@@ -56,7 +57,7 @@ function authMode(mode) {
   $('#forgot').hidden=mode!=='login';$('#resend').hidden=!verifying;
 }
 function clearWorkspace(){
-  closeScheduleImport();clearTimeout(timingTimer);clearDialog.close();resetClearCompleted();
+  closeScheduleImport();clearTimeout(timingTimer);clearTimeout(reminderTimer);clearDialog.close();resetClearCompleted();
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
   for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#group-link').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
@@ -78,6 +79,7 @@ async function establishSession(){
   if(location.hash==='#invitations')openInvitations();
   if(location.hash.startsWith('#plan='))openNotifiedPlan(location.hash.slice(6));
   try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
+  schedulePlanRingtones();
 }
 client.auth.onAuthStateChange((event)=>{
   if(event==='SIGNED_OUT'){clearWorkspace();authMode('login')}
@@ -189,6 +191,7 @@ function render(){
   const expanded=new Set([...$('#items').querySelectorAll('details[open]')].map(card=>card.dataset.id));
   $('#items').innerHTML=items.map(plan=>renderPlan(plan,expanded.has(plan.id))).join('');
   updateAgendaTiming();
+  schedulePlanRingtones();
   $('#empty-action').textContent=state.items.length?'Reset filters':'Add your first plan';
   $('#empty').hidden=items.length>0;$('#empty-title').textContent=state.items.length?'No matching plans':'A little space to begin';$('#empty-copy').textContent=state.items.length?'Try another filter or search.':'Add a task, event or occasion to your day.';
   const {complete,total,percent}=dailyProgress(state.items);
@@ -265,11 +268,26 @@ async function saveImportedShifts(plans){
   if(error)throw error;
   return count;
 }
+function syncReminderFields(){
+  const custom=$('#advance-reminder').value==='custom';
+  $('#custom-reminder-field').hidden=!custom;
+  $('#custom-reminder').required=custom;
+}
+$('#advance-reminder').onchange=syncReminderFields;
+$('#preview-tone').onclick=()=>{
+  prepareReminderSound();
+  const id=$('#item-id').value;
+  signalReminder(planTone({id,reminder_tone:$('#reminder-tone').value}),false);
+};
 function edit(item){
   if(state.busy||(item&&item.user_id!==state.user?.id))return;
   $('#item-form').reset();$('#item-id').value=item?.id||'';$('#editor-title').textContent=item?'Edit plan':'Add a plan';$('#item-error').textContent='';
   $('#item-title').value=item?.title||'';$('#description').value=item?.description||'';$('#kind').value=item?.kind||'task';$('#priority').value=item?.priority||'medium';$('#category').value=item?.category||'Uncategorised';
   $('#due-date').value=item?displayDate(item):'';$('#end-date').value=item?.end_date||'';$('#due-time').value=item?.due_at?new Date(item.due_at).toTimeString().slice(0,5):'';$('#duration').value=item?.duration_minutes||'';
+  $('#advance-reminder').value=item?.advance_reminder_at?String(item.reminder_lead_days??'custom'):'';
+  $('#custom-reminder').value=item?.advance_reminder_at?localDateTime(item.advance_reminder_at):'';
+  $('#reminder-tone').value=item?.reminder_tone||'';
+  syncReminderFields();
   $('#timezone').textContent='Times use '+Intl.DateTimeFormat().resolvedOptions().timeZone+'. Timed plans follow the same moment across devices.';
   $('#editor').showModal();$('#item-title').focus();
 }
@@ -285,7 +303,17 @@ $('#item-form').onsubmit=async e=>{
   const id=$('#item-id').value;
   const previous=state.items.find(t=>t.id===id);
   if(id&&previous?.user_id!==state.user?.id){$('#item-error').textContent='Only the owner can edit this plan.';return}
-  if(previous&&previous.due_date===plan.due_date&&previous.due_at===plan.due_at)plan.reminder_at=previous.reminder_at;
+  const sameStart=previous&&previous.due_date===plan.due_date&&previous.due_at===plan.due_at;
+  if(sameStart)plan.reminder_at=previous.reminder_at;
+  const lead=$('#advance-reminder').value, custom=$('#custom-reminder').value;
+  try{
+    const sameAdvance=previous?.advance_reminder_at&&lead===String(previous.reminder_lead_days??'custom')
+      &&(lead!=='custom'||custom===localDateTime(previous.advance_reminder_at));
+    const reminder=sameStart&&sameAdvance
+      ?{advance_reminder_at:previous.advance_reminder_at,reminder_lead_days:previous.reminder_lead_days}
+      :advanceReminder(plan.reminder_at,lead,custom);
+    Object.assign(plan,reminder,{reminder_tone:$('#reminder-tone').value||null});
+  }catch(error){$('#item-error').textContent=error.message;return}
   await mutation(async(epoch)=>{const saved=await savePlan(plan,id);if(epoch!==state.epoch)return;state.items=id?state.items.map(t=>t.id===id?saved:t):[saved,...state.items];$('#editor').close()},'Plan saved.');
 };
 function recordDeletion(items,message){
@@ -386,7 +414,7 @@ $('#clear').onclick=()=>openClearCompleted();
 $('#undo').onclick=async()=>{
   const undo=state.undo;if(!undo||undo.userId!==state.user?.id)return;
   await mutation(async(epoch)=>{
-    const rows=undo.items.map(({id,title,description,kind,priority,category,completed,due_date,end_date,due_at,duration_minutes,reminder_at})=>({id,title,description,kind,priority,category,completed,due_date,end_date,due_at,duration_minutes,reminder_at}));
+    const rows=undo.items.map(({id,title,description,kind,priority,category,completed,due_date,end_date,due_at,duration_minutes,reminder_at,advance_reminder_at,reminder_lead_days,reminder_tone})=>({id,title,description,kind,priority,category,completed,due_date,end_date,due_at,duration_minutes,reminder_at,advance_reminder_at,reminder_lead_days,reminder_tone}));
     const {data,error}=await client.from('daymark_items').insert(rows).select();if(error)throw error;
     if(epoch!==state.epoch)return;
     state.items.push(...data);state.undo=null;$('#undo').hidden=true;
@@ -406,6 +434,7 @@ async function runAlertAction(action){
   finally{
     toggle.textContent=state.alerts?'Disable alerts':'Enable alerts';
     toggle.disabled=test.disabled=false;
+    schedulePlanRingtones();
   }
 }
 $('#alerts').onclick=()=>runAlertAction(async()=>{
@@ -416,7 +445,8 @@ $('#alerts').onclick=()=>runAlertAction(async()=>{
 document.addEventListener('click',()=>{if(state.alerts)prepareReminderSound()});
 setInterval(()=>{if(state.user&&!document.hidden)refresh()},30000);
 document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden&&state.user){updateAgendaTiming();refresh()}
+  if(!document.hidden&&state.user){foregroundSince=Date.now();updateAgendaTiming();refresh()}
+  schedulePlanRingtones();
 });
 authMode('login');
 
@@ -568,6 +598,26 @@ function openNotifiedPlan(id){
 }
 $('#due-open').onclick=()=>openNotifiedPlan(notifiedPlan);
 $('#due-dismiss').onclick=()=>{$('#due-banner').hidden=true};
+function ringForPlan(item,stage){
+  const at=stage==='advance'?item.advance_reminder_at:item.reminder_at;
+  const key=item.id+':'+stage;
+  if(!at||sentAlerts.get(key)===at)return;
+  sentAlerts.set(key,at);
+  signalReminder(stage==='due'?planTone(item):'rise');
+}
+function schedulePlanRingtones(){
+  clearTimeout(reminderTimer);
+  if(!state.user||!state.alerts||document.hidden)return;
+  const now=Date.now();
+  let next=Infinity;
+  for(const item of state.items){
+    const at=Date.parse(item.reminder_at);
+    if(item.completed||!Number.isFinite(at))continue;
+    if(at>now)next=Math.min(next,at);
+    else if(at>=foregroundSince&&now-at<3000)ringForPlan(item,'due');
+  }
+  if(Number.isFinite(next))reminderTimer=setTimeout(schedulePlanRingtones,Math.min(next-now,2_147_483_647));
+}
 $('#test-alert').onclick=()=>runAlertAction(async()=>{
  prepareReminderSound();
  if(!state.alerts)state.alerts=await enablePush();
@@ -582,10 +632,7 @@ navigator.serviceWorker?.addEventListener('message',async event=>{
  $('#due-banner strong').textContent=event.data.title||'Plan due now';
  $('#due-banner-title').textContent=item.title;$('#due-banner').hidden=false;
  if(event.data.type==='OPEN_PLAN'){openNotifiedPlan(item.id);return}
- const key=item.id+':'+(event.data.stage||'due');
- if(state.alerts&&item.reminder_at&&!document.hidden&&document.hasFocus()&&sentAlerts.get(key)!==item.reminder_at){
-  sentAlerts.set(key,item.reminder_at);signalReminder();
- }
+ if(state.alerts&&!document.hidden&&document.hasFocus())ringForPlan(item,event.data.stage||'due');
 });
 
 $('#open-menu').onclick=()=>setSidebar($('#workspace').classList.contains('sidebar-collapsed'));

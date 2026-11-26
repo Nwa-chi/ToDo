@@ -1,3 +1,5 @@
+import {reminderTones} from './plan-reminders.js';
+
 let context;
 
 export function prepareReminderSound() {
@@ -10,11 +12,11 @@ export function prepareReminderSound() {
   }
 }
 
-export function signalReminder() {
-  navigator.vibrate?.([250, 100, 250, 100, 400]);
+export function signalReminder(tone = 'rise', vibrate = true) {
+  if (vibrate) navigator.vibrate?.([250, 100, 250, 100, 400]);
   if (context?.state !== 'running') return;
 
-  const tones = [659.25, 783.99, 987.77];
+  const tones = reminderTones[tone] || reminderTones.rise;
   const start = context.currentTime;
   for (const [index, frequency] of tones.entries()) {
     const oscillator = context.createOscillator();

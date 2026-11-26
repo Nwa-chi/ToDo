@@ -169,3 +169,8 @@ body:has(#auth:not([hidden]))>#main{flex:1;display:flex;flex-direction:column;mi
 #group-sharing h3,#group-sharing p,#sharing-copy{margin:0}
 #group-sharing .dialog-actions,#legacy-sharing .dialog-actions{justify-content:flex-start;margin-top:0}
 #sharing-error:empty,#legacy-sharing .dialog-actions:not(:has(button:not([hidden]))){display:none}
+
+.plan-reminders{min-width:0;display:grid;gap:10px;border:1px solid var(--line);border-radius:12px;padding:12px}
+.plan-reminders legend{padding:0 5px;font-weight:600}
+.plan-reminders p{margin:0}
+.plan-reminders button{justify-self:start}

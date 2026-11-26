@@ -21,7 +21,7 @@ self.addEventListener('activate',event=>event.waitUntil((async()=>{
 })()));
 self.addEventListener('message',event=>{
  if(event.data?.type==='ACTIVATE_UPDATE')self.skipWaiting();
- if(event.data?.type==='DAYMARK_PUSH_VERSION')event.ports[0]?.postMessage(1);
+ if(event.data?.type==='DAYMARK_PUSH_VERSION')event.ports[0]?.postMessage(2);
  if(event.data?.type==='TEST_ALERT')event.waitUntil(showAlert('daymark-test',null,'test'));
 });
 self.addEventListener('fetch',event=>{
@@ -39,6 +39,7 @@ self.addEventListener('fetch',event=>{
 });
 
 const reminderText={
+ advance:['Advance reminder','A plan you scheduled is coming up.'],
  green:['Plan starts in 3 hours','A scheduled plan starts in three hours.'],
  yellow:['Plan starts in 1 hour','A scheduled plan starts in one hour.'],
  red:['Plan starts in 10 minutes','A scheduled plan starts in ten minutes.'],
@@ -78,7 +79,7 @@ self.addEventListener('push',event=>{
   let payload={};try{payload=event.data?.json()||{}}catch{}
   const tag=typeof payload.tag==='string'?payload.tag:'daymark-reminder';
   const invitation=payload.kind==='invitation';
-  const timed=/^([a-f0-9-]{36}):(green|yellow|red)$/i.exec(tag);
+  const timed=/^([a-f0-9-]{36}):(green|yellow|red|advance)$/i.exec(tag);
   const stage=invitation?'invitation':timed?.[2].toLowerCase()||'due';
   const planId=invitation?null:timed?.[1]||tag;
   await showAlert(tag,planId,stage);
