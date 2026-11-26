@@ -212,3 +212,13 @@ body:has(#auth:not([hidden]))>#main{flex:1;display:flex;flex-direction:column;mi
 .theme-swatch.dark{background:#202436}
 #update-status:empty{display:none}
 @media(max-width:360px){.settings-entry{gap:6px;font-size:.95rem}.settings-entry .settings-caption{font-size:.8125rem}}
+
+.privacy-page{width:min(100%,780px);margin:0 auto;padding:clamp(20px,5vw,48px)}
+.privacy-page article{margin:24px 0;padding:clamp(18px,4vw,36px);border:1px solid var(--line);border-radius:18px;background:var(--surface);overflow-wrap:anywhere}
+.privacy-page header p{margin:10px 0 20px}
+.privacy-page section{margin-top:24px}
+.privacy-page section h2{margin-bottom:8px}
+.privacy-page p:last-child{margin-bottom:0}
+.privacy-page ul{padding-left:22px;margin:0}
+.privacy-page li+li{margin-top:10px}
+.privacy-page article a,.privacy-page footer a{color:var(--accent)}
