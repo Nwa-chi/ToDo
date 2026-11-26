@@ -130,6 +130,29 @@ try{
  await firstArrow.waitFor({state:'visible'});
  assert.equal(await firstArrow.textContent(),'');
  assert.equal(await firstArrow.evaluate(arrow=>getComputedStyle(arrow,'::before').borderTopStyle),'solid');
+ const redStyles=await firstArrow.evaluate(arrow=>{
+   const item=arrow.closest('.item');
+   const root=document.documentElement;
+   const originalColor=item.getAttribute('data-agenda-color');
+   const originalTheme=root.dataset.theme;
+   item.dataset.agendaColor='red';
+   try {
+     return ['light','dark'].map(theme=>{
+       root.dataset.theme=theme;
+       const name=getComputedStyle(item.querySelector('.agenda-name'));
+       const shaft=getComputedStyle(arrow,'::before');
+       const error=getComputedStyle(document.querySelector('#load-error'));
+       return [name.color,shaft.borderTopColor,shaft.borderTopWidth,name.fontWeight,error.color,error.fontWeight];
+     });
+   } finally {
+     root.dataset.theme=originalTheme;
+     if(originalColor===null)item.removeAttribute('data-agenda-color');
+     else item.dataset.agendaColor=originalColor;
+   }
+ });
+ for(const [index,color] of ['rgb(220, 0, 0)','rgb(255, 72, 72)'].entries()){
+   assert.deepEqual(redStyles[index],[color,color,'5px','900',color,'800']);
+ }
  assert.equal(await page.locator('.item-desc').isVisible(),false,'saved plans start collapsed');
  assert.equal(await page.locator('[data-edit]').isVisible(),false);
  await page.locator('.item-title').press('Enter');
@@ -232,21 +255,24 @@ try{
  await shared.locator('.item-title').click();
  assert.equal(await shared.locator('.item-desc').isVisible(),false);
  await page.screenshot({path:'test-results/desktop.png',fullPage:true});
- for(const width of [320,390]){
+ for(const width of [1280,320,390]){
    await page.setViewportSize({width,height:844});
-   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'mobile overflow');
-   const actions=await page.locator('.plan-create button').evaluateAll(buttons=>buttons.map(button=>{
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'header overflow');
+   const actions=await page.locator('.header-tools button').evaluateAll(buttons=>buttons.map(button=>{
      const bounds=button.getBoundingClientRect();
      const icon=button.querySelector('svg').getBoundingClientRect();
-     const label=button.querySelector('span').getBoundingClientRect();
-     return {label:button.textContent.trim(),width:bounds.width,height:bounds.height,top:bounds.top,iconTop:icon.top,iconAbove:icon.bottom<label.top};
+     return {name:button.getAttribute('aria-label'),width:bounds.width,center:bounds.top+bounds.height/2,left:bounds.left,right:bounds.right,icon:icon.width};
    }));
-   assert.deepEqual(actions.map(action=>action.label),['Import schedule','Add plan']);
-   assert.equal(actions[0].top,actions[1].top);
-   assert.equal(actions[0].width,actions[1].width);
-   assert.equal(actions[0].iconTop,actions[1].iconTop);
-   assert.ok(actions.every(action=>action.height>=44&&action.width<width/2&&action.iconAbove));
+   const [invitations,importSchedule]=actions;
+   assert.deepEqual(actions.map(action=>action.name),['Invitations','Import schedule']);
+   assert.equal(invitations.center,importSchedule.center);
+   assert.equal(importSchedule.left-invitations.right,6);
+   assert.deepEqual(actions.map(action=>action.width),[44,45]);
+   assert.ok(Math.abs(importSchedule.icon/invitations.icon-1.02)<0.002);
+   await page.locator('#add').getByText('Add plan',{exact:true}).waitFor();
  }
+ await page.getByRole('button',{name:'Invitations',exact:true}).click();
+ await page.locator('#invitations-panel').getByRole('button',{name:'Close invitations'}).click();
  await page.locator('#close-sidebar').click();
  assert.equal(await page.locator('#daymark-sidebar').isVisible(),false);
  assert.equal(await page.locator('#open-menu').getAttribute('aria-expanded'),'false');
