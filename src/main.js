@@ -59,7 +59,7 @@ function clearWorkspace(){
   closeScheduleImport();clearTimeout(timingTimer);clearDialog.close();resetClearCompleted();
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
-  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
+  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#group-link').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();$('#alerts').textContent='Enable alerts';$('#alert-error').textContent='';
 }
 async function establishSession(){
@@ -74,6 +74,7 @@ async function establishSession(){
   if(state.user?.id!==data.user.id){state.epoch++;state.items=[];state.undo=null;sentAlerts.clear();clearDialog.close();resetClearCompleted()}
   state.user=data.user;$('#auth').hidden=true;$('#workspace').hidden=false;$('#account-email').textContent=data.user.email;
   await refresh();
+  routePlanLink();
   if(location.hash==='#invitations')openInvitations();
   if(location.hash.startsWith('#plan='))openNotifiedPlan(location.hash.slice(6));
   try{state.alerts=await restorePush();$('#alerts').textContent=state.alerts?'Disable alerts':'Enable alerts'}catch{state.alerts=false;$('#alerts').textContent='Enable alerts'}
@@ -154,7 +155,7 @@ function renderPlan(plan,open){
     <summary class="item-title"><span class="agenda-label"><span class="agenda-arrow" aria-hidden="true"></span><span class="agenda-name">${title}</span></span></summary>
     <div class="plan-detail">
       ${plan.description?`<p class="item-desc">${escape(plan.description)}</p>`:''}
-      <div class="meta">${plan.collaborator_id?`<span class="chip">${owner?'Shared · Owner':'Shared · Read only'}</span>`:''}
+      <div class="meta">${(!owner||plan.collaborator_id)?`<span class="chip">${owner?'Shared · Owner':'Shared · Read only'}</span>`:''}
         <span class="chip">${escape(plan.kind)}</span><span class="chip${plan.priority==='high'?' high':''}">${escape(plan.priority)} priority</span>
         <span class="chip">${escape(plan.category)}</span><span class="chip${overdue(plan)?' high':''}">${overdue(plan)?'Overdue · ':''}${escape(dateLabel(plan))}</span>
         ${plan.duration_minutes?`<span class="chip">${plan.duration_minutes} min</span>`:''}
@@ -162,7 +163,7 @@ function renderPlan(plan,open){
       ${owner?`<label class="plan-completion"><input type="checkbox" data-complete ${plan.completed?'checked':''} aria-label="${plan.completed?'Reopen':'Complete'} ${title}">Completed</label>`:`<p class="fine plan-status">${plan.completed?'Completed':'Open'}</p>`}
       <div class="item-actions">
         ${owner?`<button data-edit class="link" aria-label="Edit ${title}">Edit</button>`:''}
-        <button data-share class="link" aria-label="Sharing for ${title}">${plan.collaborator_id?'Sharing':'Share'}</button>
+        <button data-share class="link" aria-label="${owner?'Sharing for':'Access to'} ${title}">${owner?'Share':'Manage access'}</button>
         ${owner?`<button data-delete class="link danger" aria-label="Delete ${title}">Delete</button>`:''}
       </div>
     </div>
@@ -431,35 +432,128 @@ $('#reset-filters').onclick=()=>{$('#search').value='';for(const id of ['kind-fi
 for(const button of document.querySelectorAll('[data-date]'))button.onclick=()=>{const choice=button.dataset.date;if(choice==='clear'){$('#due-date').value='';$('#end-date').value='';$('#due-time').value='';return;}const date=new Date();if(choice==='tomorrow')date.setDate(date.getDate()+1);$('#due-date').value=localDate(date)};
 
 let sharingItem=null,sharingBusy=false;
+const joinToken=()=>/^#join=([a-f0-9]{64})$/.exec(location.hash)?.[1]||null;
+const sharingDialog=$('#sharing');
+function routePlanLink(){
+ const token=joinToken();
+ $('#join-auth-hint').hidden=!token||!!state.user;
+ if(token&&state.user&&!sharingDialog.open&&!$('#editor').open)openSharing();
+}
+
+function showGroupSharing(data){
+ const active=!!data.token,count=data.member_count;
+ const origin=location.hostname.endsWith('.chatgpt.site')?'https://daymarks.click':location.origin;
+ $('#group-status').textContent=count===1?'1 person joined by link.':`${count} people joined by link.`;
+ $('#group-link').value=active?`${origin}/#join=${data.token}`:'';
+ for(const id of ['group-link-field','group-copy','group-disable'])$('#'+id).hidden=!active;
+ $('#group-create').hidden=active;
+ $('#group-remove').hidden=!count;
+}
+
 function openSharing(item=null){
- if(state.busy||sharingBusy)return;
- sharingItem=item;$('#sharing-title').textContent=item?'Share this plan':'Link a plan';
+ if(!state.user||state.busy||sharingBusy||sharingDialog.open)return;
+ const owner=item?.user_id===state.user.id, byLink=!item&&!!joinToken(), legacyInvite=owner&&!item.collaborator_id;
+ sharingItem=item;
+ $('#sharing-title').textContent=owner?'Share this plan':item?'Shared plan access':byLink?'Join a shared plan':'Link a plan';
+ $('#sharing-copy').textContent=owner?'Share “'+item.title+'”':item?'You can view this plan. Only the owner can edit it.':byLink?'Join to add this agenda to your Daymark plans.':'Enter the invitation code from the owner.';
  $('#sharing-error').textContent='';$('#invite-code').value='';$('#invite-code').readOnly=!!item;
- $('#invite-field').hidden=!!item;$('#share-copy').hidden=true;
- const owner=item?.user_id===state.user.id;
- $('#invite-email').value='';$('#invite-email-field').hidden=!owner||!!item?.collaborator_id;$('#invite-email').required=owner&&!item?.collaborator_id;$('#share-code').hidden=!owner||!!item?.collaborator_id;
- $('#sharing-copy').textContent=!item?'Enter the code from the owner to view their plan.':!owner?'Only the owner can change this plan. Leave it to remove it from your list.':item.collaborator_id?'This plan is shared with one other person. They can view it. Remove access to stop sharing.':'Enter their verified Daymark account email. They’ll receive an invitation to accept or decline. Sending another invitation replaces the previous one.';
- $('#share-submit').hidden=!!item?.collaborator_id;$('#share-submit').textContent=item?'Send invitation':'Link plan';
- $('#share-revoke').hidden=!item;$('#share-revoke').textContent=owner?'Revoke invitation / access':'Leave plan';
- $('#sharing').showModal();if(!item)$('#invite-code').focus();
+ $('#group-sharing').hidden=!owner;
+ $('#group-link').value='';
+ for(const id of ['group-link-field','group-create','group-copy','group-disable','group-remove'])$('#'+id).hidden=true;
+ $('#group-status').textContent=owner?'Loading link…':'';
+ $('#legacy-sharing').hidden=!!item&&!legacyInvite||byLink;
+ $('#invite-field').hidden=!!item||byLink;$('#share-copy').hidden=true;
+ $('#invite-email').value='';$('#invite-email-field').hidden=!legacyInvite;$('#invite-email').required=legacyInvite;$('#share-code').hidden=!legacyInvite;
+ $('#share-submit').hidden=!!item&&!legacyInvite;
+ $('#share-submit').textContent=owner?'Send email invitation':'Join plan';
+ $('#share-revoke').hidden=!item;
+ $('#share-revoke').textContent=owner?'Revoke email or code access':'Leave plan';
+ sharingDialog.showModal();
+ if(owner)void sharingAction('group_status');
+ else if(!item&&!byLink)$('#invite-code').focus();
 }
 $('#join-plan').onclick=()=>openSharing();
+addEventListener('hashchange',routePlanLink);
+sharingDialog.addEventListener('cancel',event=>{if(sharingBusy)event.preventDefault()});
+sharingDialog.addEventListener('close',()=>{if(!sharingItem&&joinToken())history.replaceState(null,'',location.pathname+location.search)});
+
 async function sharingAction(action){
- if(sharingBusy)return;sharingBusy=true;const epoch=state.epoch;
- for(const b of document.querySelectorAll('#sharing button'))b.disabled=true;
+ if(sharingBusy||!state.user)return;
+ sharingBusy=true;
+ const epoch=state.epoch, plan=sharingItem, p_plan=plan?.id||null;
+ const errorMessage=$('#sharing-error');
+ errorMessage.textContent='';
+ for(const button of sharingDialog.querySelectorAll('button'))button.disabled=true;
  try{
-  const {data,error}=action==='send'?await client.rpc('daymark_invitation',{p_action:'send',p_plan:sharingItem.id,p_email:$('#invite-email').value.trim()}):await client.rpc('daymark_share',{p_plan:sharingItem?.id||null,p_action:action,p_code:$('#invite-code').value.trim().toLowerCase()});if(error)throw error;
+  let result;
+  if(action.startsWith('group_')){
+   result=await client.rpc('daymark_group_share',{p_action:action.slice(6),p_plan,p_token:joinToken()});
+  }else if(action==='send'){
+   result=await client.rpc('daymark_invitation',{p_action:'send',p_plan,p_email:$('#invite-email').value.trim()});
+  }else{
+   result=await client.rpc('daymark_share',{p_plan,p_action:action,p_code:$('#invite-code').value.trim().toLowerCase()});
+  }
   if(epoch!==state.epoch)return;
-  if(action==='send'){$('#sharing').close();toast('Invitation requested. If this email has a verified Daymark account, they’ll find it in Invitations.');}
-  else if(action==='invite'){$('#invite-field').hidden=false;$('#invite-code').value=data;$('#share-copy').hidden=false;$('#sharing-copy').textContent='Send this code privately to one person. They should sign in, choose Link a plan, and enter it within 24 hours.'}
-  else{$('#sharing').close();await refresh();toast(action==='join'?'Plan linked.':action==='leave'?'You left the plan.':'Invitation and shared access revoked.')}
- }catch(e){$('#sharing-error').textContent=e.message}
- finally{sharingBusy=false;for(const b of document.querySelectorAll('#sharing button'))b.disabled=false}
+  const {data,error}=result;
+  if(error)throw error;
+  if(['group_status','group_create','group_disable','group_remove_members'].includes(action)){
+   showGroupSharing(data);
+  }else if(action==='invite'){
+   $('#invite-field').hidden=false;$('#invite-code').value=data;$('#share-copy').hidden=false;
+   $('#sharing-copy').textContent='Send this code privately to one person. They can enter it in Link a plan within 24 hours.';
+  }else{
+   if(action==='group_join')history.replaceState(null,'',location.pathname+location.search);
+   sharingDialog.close();
+   if(action==='send'){
+    toast('Invitation requested. If this email has a verified Daymark account, they’ll find it in Invitations.');
+    return;
+   }
+   cancelRefresh();
+   await refresh();
+   if(epoch!==state.epoch)return;
+   if(action==='group_join'||action==='join'){
+    openNotifiedPlan(action==='group_join'?data.plan_id:data);
+   }else{
+    toast(action==='group_leave'?'You left the plan.':'Email and code invitations and access revoked.');
+   }
+  }
+ }catch(error){
+  if(epoch===state.epoch){
+   if(action==='group_status')$('#group-status').textContent='Could not load the group link. Reopen sharing to try again.';
+   else errorMessage.textContent=error.message;
+  }
+ }finally{
+  sharingBusy=false;
+  for(const button of sharingDialog.querySelectorAll('button'))button.disabled=false;
+ }
 }
-$('#sharing-form').onsubmit=e=>{e.preventDefault();sharingAction(sharingItem?'send':'join')};
+
+$('#sharing-form').onsubmit=event=>{
+ event.preventDefault();
+ sharingAction(sharingItem?'send':joinToken()?'group_join':'join');
+};
 $('#share-code').onclick=()=>sharingAction('invite');
-$('#share-revoke').onclick=()=>sharingAction(sharingItem?.user_id===state.user.id?'revoke':'leave');
-$('#share-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#invite-code').value);toast('Invitation code copied.')}catch{$('#invite-code').select();$('#sharing-error').textContent='Select and copy the invitation code.'}};
+$('#share-revoke').onclick=()=>sharingAction(sharingItem?.user_id===state.user.id?'revoke':'group_leave');
+$('#group-create').onclick=()=>sharingAction('group_create');
+$('#group-disable').onclick=()=>sharingAction('group_disable');
+$('#group-remove').onclick=()=>{
+ if(confirm('Remove everyone who joined this plan through a group link and disable the link?'))sharingAction('group_remove_members');
+};
+async function copySharingValue(id,label){
+ const input=$('#'+id);
+ try{
+  await navigator.clipboard.writeText(input.value);
+  $('#sharing-error').textContent='';
+  if(id==='group-link')$('#group-status').textContent='Link copied.';
+  else $('#sharing-copy').textContent='Invitation code copied.';
+ }catch{
+  input.focus();input.select();
+  $('#sharing-error').textContent='Select and copy the '+label+'.';
+ }
+}
+$('#share-copy').onclick=()=>copySharingValue('invite-code','invitation code');
+$('#group-copy').onclick=()=>copySharingValue('group-link','group link');
+routePlanLink();
 
 let notifiedPlan=null;
 function openNotifiedPlan(id){

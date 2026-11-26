@@ -44,6 +44,10 @@ try{
  const token=encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:user.id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',aud:'authenticated'})+'.test-signature';
  const session={access_token:token,token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,refresh_token:'test-refresh',user};
  let rows=[],writes=0,clearWrites=0,planReadStatus=200,notificationRegistrations=0;
+ const groupToken='a'.repeat(64);
+ let activeGroupToken=null,joinedByLink=0;
+ const sharedId='00000000-0000-4000-8000-000000000088';
+ const groupGuestPlan={id:sharedId,user_id:crypto.randomUUID(),collaborator_id:null,title:'Shared appointment',description:'Read-only details',category:'Work',kind:'event',priority:'medium',completed:false,created_at:new Date().toISOString(),due_date:'2026-10-01'};
  await page.route('https://uolwbaappjrggtaydvsq.supabase.co/**',async route=>{
    const request=route.request(),url=new URL(request.url()),method=request.method();
    const respond=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -82,6 +86,22 @@ try{
      return respond(removed);
    }
    if(url.pathname==='/rest/v1/rpc/daymark_invitation')return respond([]);
+   if(url.pathname==='/rest/v1/rpc/daymark_group_share'){
+     const {p_action:action,p_token:token,p_plan:id}=request.postDataJSON();
+     if(action==='join'){
+       if(token!==groupToken)return respond({message:'This plan link is invalid or has been disabled'},400);
+       joinedByLink++;
+       if(!rows.some(row=>row.id===sharedId))rows.push(groupGuestPlan);
+       return respond({plan_id:sharedId});
+     }
+     if(action==='leave'){
+       rows=rows.filter(row=>row.id!==id);
+       return respond({});
+     }
+     if(action==='create')activeGroupToken=groupToken;
+     if(action==='disable')activeGroupToken=null;
+     return respond({token:activeGroupToken,member_count:0});
+   }
    if(url.pathname==='/rest/v1/rpc/daymark_push_settings'){
      const {p_subscription:subscription,p_remove:remove}=request.postDataJSON();
      if(subscription){notificationRegistrations++;return respond('enabled');}
@@ -257,8 +277,22 @@ try{
  await page.locator('#undo').click();
  await page.locator('.item-title').filter({hasText:otherCompleted.title}).waitFor();
  assert.equal(rows.filter(plan=>plan.completed).length,2);
- const sharedId='00000000-0000-4000-8000-000000000088';
- rows.push({id:sharedId,user_id:crypto.randomUUID(),collaborator_id:user.id,title:'Shared appointment',description:'Read-only details',category:'Work',kind:'event',priority:'medium',completed:false,created_at:new Date().toISOString(),due_date:'2026-10-01'});
+ await page.getByRole('button',{name:'All plans',exact:true}).click();
+ const ownerCard=page.locator('[data-id="'+openPlan.id+'"]');
+ await ownerCard.locator('.item-title').click();
+ await ownerCard.locator('[data-share]').click();
+ await page.locator('#group-create').click();
+ await page.locator('#group-link').waitFor({state:'visible'});
+ const groupLink=await page.locator('#group-link').inputValue();
+ assert.equal(groupLink,base+'/#join='+groupToken);
+ await page.locator('#sharing [data-close-dialog]').click();
+ await ownerCard.locator('[data-share]').click();
+ await page.locator('#group-link').waitFor({state:'visible'});
+ assert.equal(await page.locator('#group-link').inputValue(),groupLink);
+ await page.locator('#group-disable').click();
+ await page.locator('#group-link').waitFor({state:'hidden'});
+ await page.locator('#sharing [data-close-dialog]').click();
+ rows.push({...groupGuestPlan,collaborator_id:user.id});
  await page.getByRole('button',{name:'All plans',exact:true}).click();
  await page.locator('#refresh').click();
  const shared=page.locator(`[data-id="${sharedId}"]`);
@@ -419,8 +453,28 @@ try{
  await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
  await page.waitForURL(url=>url.searchParams.get('build')==='fedcba9876543210');
  await page.locator('#workspace').waitFor({state:'visible'});
+ await page.unroute('**/build.json?check=*');
+ await page.evaluate(()=>localStorage.removeItem('daymark-todo-auth-v1'));
+ rows=rows.filter(row=>row.id!==sharedId);
+ await page.goto(groupLink);
+ await page.locator('#join-auth-hint').waitFor({state:'visible'});
+ assert.equal(joinedByLink,0);
+ await page.locator('#email').fill(user.email);
+ await page.locator('#password').fill('Browser-test-password!');
+ await page.locator('#auth-submit').click();
+ await page.getByRole('heading',{name:'Join a shared plan'}).waitFor();
+ assert.equal(joinedByLink,0,'opening the link should wait for an explicit join');
+ await page.locator('#share-submit').click();
+ await shared.locator('.item-desc').waitFor({state:'visible'});
+ assert.equal(joinedByLink,1);
+ assert.equal(new URL(page.url()).hash,'');
+ assert.equal(await shared.locator('[data-edit], [data-complete], [data-delete]').count(),0);
+ await shared.locator('[data-share]').click();
+ assert.equal(await page.locator('#group-sharing').isVisible(),false);
+ await page.locator('#share-revoke').click();
+ await shared.waitFor({state:'detached'});
  assert.deepEqual(errors,[]);
- console.log('PASS: plan and account flows, typed single and bulk clears, undo, shared plans, mobile, agenda arrows, work schedule import and installed app updates. API mocked.');
+ console.log('PASS: accounts, plans, group links, read-only access, mobile, work schedule import and installed app updates. API mocked.');
 }catch(error){
  if(page && !page.isClosed()){
    await page.screenshot({path:'test-results/failure.png',timeout:5_000})
