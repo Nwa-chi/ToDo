@@ -129,7 +129,18 @@ try{
  const firstArrow=page.locator('.agenda-arrow');
  await firstArrow.waitFor({state:'visible'});
  assert.equal(await firstArrow.textContent(),'');
- assert.equal(await firstArrow.evaluate(arrow=>getComputedStyle(arrow,'::before').borderTopStyle),'solid');
+ const normalArrow=await firstArrow.evaluate(arrow=>{
+   const item=arrow.closest('.item');
+   const originalColor=item.getAttribute('data-agenda-color');
+   item.dataset.agendaColor='green';
+   const style=getComputedStyle(arrow);
+   const shape={width:parseFloat(style.width),clip:style.clipPath};
+   if(originalColor===null)item.removeAttribute('data-agenda-color');
+   else item.dataset.agendaColor=originalColor;
+   return shape;
+ });
+ assert.ok(Math.abs(normalArrow.width/28-.98)<.002);
+ assert.match(normalArrow.clip,/0px 100%, 3\.5px 50%\)$/,'forked tail');
  const redStyles=await firstArrow.evaluate(arrow=>{
    const item=arrow.closest('.item');
    const root=document.documentElement;
@@ -140,9 +151,9 @@ try{
      return ['light','dark'].map(theme=>{
        root.dataset.theme=theme;
        const name=getComputedStyle(item.querySelector('.agenda-name'));
-       const shaft=getComputedStyle(arrow,'::before');
+       const shaft=getComputedStyle(arrow);
        const error=getComputedStyle(document.querySelector('#load-error'));
-       return [name.color,shaft.borderTopColor,shaft.borderTopWidth,name.fontWeight,error.color,error.fontWeight];
+       return {styles:[name.color,shaft.backgroundColor,shaft.getPropertyValue('--arrow-half-shaft').trim(),name.fontWeight,error.color,error.fontWeight],width:parseFloat(shaft.width)};
      });
    } finally {
      root.dataset.theme=originalTheme;
@@ -151,7 +162,8 @@ try{
    }
  });
  for(const [index,color] of ['rgb(220, 0, 0)','rgb(255, 72, 72)'].entries()){
-   assert.deepEqual(redStyles[index],[color,color,'5px','900',color,'800']);
+   assert.deepEqual(redStyles[index].styles,[color,color,'2.5px','900',color,'800']);
+   assert.ok(Math.abs(redStyles[index].width/31-.98)<.002);
  }
  assert.equal(await page.locator('.item-desc').isVisible(),false,'saved plans start collapsed');
  assert.equal(await page.locator('[data-edit]').isVisible(),false);
@@ -261,15 +273,17 @@ try{
    const actions=await page.locator('.header-tools button').evaluateAll(buttons=>buttons.map(button=>{
      const bounds=button.getBoundingClientRect();
      const icon=button.querySelector('svg').getBoundingClientRect();
-     return {name:button.getAttribute('aria-label'),width:bounds.width,center:bounds.top+bounds.height/2,left:bounds.left,right:bounds.right,icon:icon.width};
+     return {name:button.getAttribute('aria-label'),width:bounds.width,height:bounds.height,center:bounds.top+bounds.height/2,left:bounds.left,right:bounds.right,icon:icon.width};
    }));
-   const [invitations,importSchedule]=actions;
-   assert.deepEqual(actions.map(action=>action.name),['Invitations','Import schedule']);
+   const [invitations,importSchedule,addPlan]=actions;
+   assert.deepEqual(actions.map(action=>action.name),['Invitations','Import schedule','Add plan']);
    assert.equal(invitations.center,importSchedule.center);
+   assert.equal(addPlan.center,importSchedule.center);
    assert.equal(importSchedule.left-invitations.right,6);
-   assert.deepEqual(actions.map(action=>action.width),[44,45]);
+   assert.equal(addPlan.left-importSchedule.right,6);
+   assert.deepEqual(actions.map(action=>[action.width,action.height]),[[44,44],[45,45],[45,45]]);
    assert.ok(Math.abs(importSchedule.icon/invitations.icon-1.02)<0.002);
-   await page.locator('#add').getByText('Add plan',{exact:true}).waitFor();
+   assert.equal(addPlan.icon,importSchedule.icon);
  }
  await page.getByRole('button',{name:'Invitations',exact:true}).click();
  await page.locator('#invitations-panel').getByRole('button',{name:'Close invitations'}).click();

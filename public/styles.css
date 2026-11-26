@@ -102,20 +102,31 @@ body:has(#auth:not([hidden]))>#main{flex:1;display:flex;flex-direction:column;mi
 /* Header actions */
 .page-header>.header-tools{display:flex;align-items:center;gap:6px;flex:none}
 .header-tools>.secondary{position:relative;display:grid;place-items:center;width:44px;height:44px;padding:0}
-.header-tools>#open-schedule-import{width:45px;height:45px}
+.header-tools>.plan-tool{width:45px;height:45px}
 .header-tools svg{width:1.25rem;height:1.25rem}
-#open-schedule-import svg{width:1.275rem;height:1.275rem}
+.header-tools .plan-tool svg{width:1.275rem;height:1.275rem}
 #invitation-badge{position:absolute;top:-4px;right:-4px;margin:0}
-.page-header>.plan-create{display:grid;flex:0 1 7.25rem}
-.page-header .plan-create button{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:3.75rem;padding:7px 6px;font-size:.875rem;line-height:1.2;text-align:center;white-space:normal}
-.plan-create svg{width:1.25rem;height:1.25rem;flex:none}
 
 /* Agenda timing */
 .agenda-label{display:flex;align-items:center;gap:12px;min-width:0}
 .agenda-name{min-width:0;overflow-wrap:anywhere}
-.agenda-arrow{display:inline-flex;flex:none;align-items:center;color:var(--agenda-color,var(--text))}
-.agenda-arrow::before{content:"";width:22px;border-top:2px solid currentColor}
-.agenda-arrow::after{content:"";border-left:6px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.agenda-arrow{
+ --arrow-head:6px;
+ --arrow-half-shaft:1px;
+ flex:none;
+ width:calc(28px * .98);
+ height:8px;
+ background-color:var(--agenda-color,var(--text));
+ clip-path:polygon(
+  0 0, 2px 0, 7px calc(50% - var(--arrow-half-shaft)),
+  calc(100% - var(--arrow-head)) calc(50% - var(--arrow-half-shaft)),
+  calc(100% - var(--arrow-head)) 0, 100% 50%,
+  calc(100% - var(--arrow-head)) 100%,
+  calc(100% - var(--arrow-head)) calc(50% + var(--arrow-half-shaft)),
+  7px calc(50% + var(--arrow-half-shaft)), 2px 100%, 0 100%, 3.5px 50%
+ );
+}
+@media(forced-colors:active){.agenda-arrow{forced-color-adjust:none;background-color:CanvasText}}
 .item[data-agenda-color=green]{--agenda-color:#0b7045}
 .item[data-agenda-color=yellow]{--agenda-color:#855900}
 .item[data-agenda-color=red]{--agenda-color:var(--danger)}
@@ -123,8 +134,12 @@ body:has(#auth:not([hidden]))>#main{flex:1;display:flex;flex-direction:column;mi
 [data-theme=dark] .item[data-agenda-color=yellow]{--agenda-color:#ffd76a}
 .agenda-name{color:var(--agenda-color,var(--text))}
 .item[data-agenda-color=red] .agenda-label{font-weight:900}
-.item[data-agenda-color=red] .agenda-arrow::before{border-top-width:5px}
-.item[data-agenda-color=red] .agenda-arrow::after{border-left-width:9px;border-block-width:7px}
+.item[data-agenda-color=red] .agenda-arrow{
+ --arrow-head:9px;
+ --arrow-half-shaft:2.5px;
+ width:calc(31px * .98);
+ height:14px;
+}
 #schedule-import{width:min(690px,calc(100% - 24px))}
 #schedule-import p{margin:0}
 #schedule-import p:empty,#schedule-rows:empty{display:none}
@@ -138,7 +153,6 @@ body:has(#auth:not([hidden]))>#main{flex:1;display:flex;flex-direction:column;mi
 .schedule-row input{width:100%;min-width:0;padding-inline:8px}
 .schedule-row label{min-width:0}
 @media(max-width:600px){
- .page-header>.plan-create{grid-column:1/-1;inline-size:min(100%,7.25rem)}
  .schedule-row{grid-template-columns:repeat(2,minmax(0,1fr))}
  .schedule-row label:first-of-type{grid-column:1/-1}
  .schedule-row button{grid-column:1/-1;justify-self:start}
