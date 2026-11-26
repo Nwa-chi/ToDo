@@ -328,30 +328,41 @@ try{
  await page.getByRole('button',{name:'Invitations',exact:true}).click();
  await page.locator('#invitations-panel').getByRole('button',{name:'Close invitations'}).click();
  await page.locator('.icon-rail [data-panel="settings-panel"]').click();
- const alertSettings=page.getByRole('dialog',{name:'Settings',exact:true});
- await alertSettings.locator('.notification-heading svg').waitFor();
- assert.deepEqual(await alertSettings.getByRole('heading', {level:3}).allTextContents()
-   .then(labels=>labels.map(label=>label.trim())),['Appearance','Notifications','App']);
- const theme=alertSettings.locator('#theme-current');
- const initialTheme=await theme.textContent();
- await alertSettings.getByRole('button',{name:'Switch theme'}).click();
- assert.notEqual(await theme.textContent(),initialTheme);
- await alertSettings.getByRole('button',{name:'Switch theme'}).click();
- const reminderDetails=alertSettings.locator('.settings-details');
- const showReminderDetails=alertSettings.getByText('Reminder timing and sound',{exact:true});
- assert.equal(await reminderDetails.locator('p').first().isVisible(),false);
- await showReminderDetails.click();
- assert.equal(await reminderDetails.locator('p').first().isVisible(),true);
- await showReminderDetails.click();
- assert.equal(await reminderDetails.locator('p').first().isVisible(),false);
+ const alertSettings=page.locator('#settings-panel');
+ const settingsBack=alertSettings.getByRole('button',{name:'Back to Settings'});
+ const appearanceEntry=alertSettings.locator('[data-open-settings="appearance"]');
+ const notificationsEntry=alertSettings.locator('[data-open-settings="notifications"]');
+ assert.equal(await page.locator('.icon-rail [data-panel="profile-panel"]').count(),0);
+ assert.equal(await alertSettings.getByRole('button',{name:'Enable alerts',exact:true}).isVisible(),false);
+ assert.equal(await alertSettings.getByRole('radio',{name:'Light',exact:true}).isVisible(),false);
+ assert.equal(await alertSettings.locator('details,select').count(),0);
+ await alertSettings.getByRole('button',{name:'Profile',exact:true}).click();
+ assert.equal(await alertSettings.getByRole('heading',{name:'Profile',exact:true}).isVisible(),true);
+ assert.equal(await alertSettings.locator('#account-email').textContent(),user.email);
+ assert.equal(await alertSettings.getByRole('button',{name:'Sign out'}).isVisible(),true);
+ await settingsBack.click();
+ await appearanceEntry.click();
+ assert.equal(await alertSettings.getByRole('heading',{name:'Appearance',exact:true}).isVisible(),true);
+ assert.equal(await alertSettings.getByRole('button',{name:'Test alert'}).isVisible(),false);
+ const darkChoice=alertSettings.getByRole('radio',{name:'Dark',exact:true});
+ const lightChoice=alertSettings.getByRole('radio',{name:'Light',exact:true});
+ await darkChoice.check();
+ assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
+ await lightChoice.check();
+ assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
+ if(process.env.DAYMARK_SETTINGS_QA)await darkChoice.check();
+ await page.keyboard.press('Escape');
+ await alertSettings.getByRole('heading',{name:'Settings',exact:true}).waitFor();
+ assert.equal(await appearanceEntry.evaluate(entry=>entry===document.activeElement),true,'focus returns to the category');
  await page.setViewportSize({width:320,height:580});
  assert.equal(await alertSettings.evaluate(dialog=>dialog.scrollWidth>dialog.clientWidth),false,'settings overflow at 320px');
  await page.setViewportSize({width:390,height:844});
+ if(process.env.DAYMARK_SETTINGS_QA)await alertSettings.screenshot({path:'test-results/settings-menu.png'});
+ await notificationsEntry.click();
+ await alertSettings.getByRole('heading',{name:'Notifications',exact:true}).waitFor();
+ assert.equal(await alertSettings.getByRole('heading',{name:'Reminder timing and sound'}).isVisible(),true);
  assert.equal(await alertSettings.locator('#alert-status').textContent(),'Alerts off');
- if(process.env.DAYMARK_SETTINGS_QA){
-   if((await theme.textContent())==='Light theme')await alertSettings.getByRole('button',{name:'Switch theme'}).click();
-   await alertSettings.screenshot({path:'test-results/settings.png'});
- }
+ if(process.env.DAYMARK_SETTINGS_QA)await alertSettings.screenshot({path:'test-results/settings-notifications.png'});
  await page.context().grantPermissions(['notifications'],{origin:base});
  await page.evaluate(()=>{
    // Headless Chromium has no system notification tray. Check the call at the browser API.
@@ -371,6 +382,9 @@ try{
  await alertSettings.getByRole('button',{name:'Test alert',exact:true}).click();
  await alertSettings.getByRole('button',{name:'Disable alerts',exact:true}).waitFor();
  assert.equal(await alertSettings.locator('#alert-status').textContent(),'Alerts on');
+ await settingsBack.click();
+ assert.equal(await alertSettings.locator('#alert-overview').textContent(),'On');
+ await notificationsEntry.click();
  assert.equal(notificationRegistrations,1,'Test alert registers this device for scheduled reminders');
  assert.deepEqual(await page.evaluate(()=>window.testDeviceNotifications),[
    {title:'Daymark · Test alert',tag:'daymark-test',active:true}
@@ -383,6 +397,10 @@ try{
  });
  await alertSettings.getByRole('button',{name:'Test alert',exact:true}).click();
  await alertSettings.getByRole('alert').filter({hasText:'Allow notifications in your device settings'}).waitFor();
+ await settingsBack.click();
+ await alertSettings.locator('[data-open-settings="app"]').click();
+ await alertSettings.getByRole('button',{name:'Check for updates',exact:true}).click();
+ await alertSettings.getByRole('status').filter({hasText:'Daymark is up to date.'}).waitFor();
  await alertSettings.getByRole('button',{name:'Close settings'}).click();
  await page.locator('#close-sidebar').click();
  assert.equal(await page.locator('#daymark-sidebar').isVisible(),false);
@@ -399,7 +417,8 @@ try{
    await dialog.locator('[data-close-dialog]').click();
  }
  await page.screenshot({path:'test-results/mobile.png',fullPage:true});
- await page.locator('.icon-rail [data-panel="profile-panel"]').click();
+ await page.locator('.icon-rail [data-panel="settings-panel"]').click();
+ await alertSettings.getByRole('button',{name:'Profile',exact:true}).click();
  await page.locator('#logout').click();await page.locator('#auth').waitFor({state:'visible'});
  assert.equal(await page.locator('.item').count(),0);
  await page.locator('#email').fill(user.email);

@@ -27,15 +27,18 @@ const closeScheduleImport=setupScheduleImport(saveImportedShifts,(count,total)=>
 });
 function cancelRefresh(){refreshSequence++;refreshRequest.cancel();refreshTask=null;if($('#sync-status').textContent==='Syncing…')$('#sync-status').textContent='';$('#loading').hidden=true;$('#items').setAttribute('aria-busy','false');}
 function preference(key,fallback){try{return localStorage.getItem(key)||fallback}catch{return fallback}}
+const themeChoices=document.querySelectorAll('input[name="daymark-theme"]');
 function showTheme(theme){
-  document.documentElement.dataset.theme=theme;
-  $('#theme-current').textContent=theme==='dark'?'Dark theme':'Light theme';
+  const active=theme==='dark'?'dark':'light';
+  document.documentElement.dataset.theme=active;
+  $('#theme-current').textContent=active==='dark'?'Dark':'Light';
+  for(const choice of themeChoices)choice.checked=choice.value===active;
 }
 showTheme(preference('daymark-theme',matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));
-$('#theme').onclick=()=>{
-  const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
-  showTheme(theme);
-  try{localStorage.setItem('daymark-theme',theme)}catch{}
+for(const choice of themeChoices)choice.onchange=()=>{
+  if(!choice.checked)return;
+  showTheme(choice.value);
+  try{localStorage.setItem('daymark-theme',choice.value)}catch{}
 };
 function toast(message,undo=false){
   clearTimeout(toastTimer);$('#toast').hidden=true;$('#auth-notice').hidden=true;
@@ -68,7 +71,7 @@ function clearWorkspace(){
   closeScheduleImport();clearTimeout(timingTimer);clearTimeout(reminderTimer);clearDialog.close();resetClearCompleted();
   state.epoch++;cancelRefresh();state.user=null;state.items=[];state.undo=null;state.alerts=false;sentAlerts.clear();
   clearTimeout(toastTimer);$('#auth-notice').hidden=true;$('#session-status').hidden=true;
-  for(const id of ['menu-panel','profile-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#group-link').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
+  for(const id of ['menu-panel','settings-panel','email-panel'])$('#'+id).close();$('#email-address').textContent='';$('#profile-since').textContent='';$('#settings-account').textContent='';$('#settings-avatar').textContent='';$('#search-panel').close();$('#invitations-panel').close();$('#invitation-list').replaceChildren();$('#invitation-badge').hidden=true;$('#invite-email').value='';invitationsRequest.cancel();$('#sharing').close();$('#invite-code').value='';$('#group-link').value='';$('#editor').close();$('#confirm').close();$('#toast').hidden=true;$('#workspace').hidden=true;$('#auth').hidden=false;
   $('#due-banner').hidden=true;$('#due-banner-title').textContent='';$('#items').replaceChildren();$('#account-email').textContent='';$('#password').value='';$('#code').value='';$('#sync-status').textContent='';$('#about-dialog').close();showAlertSettings();$('#alert-error').textContent='';
 }
 async function establishSession(){
@@ -438,6 +441,7 @@ function showAlertSettings(){
   toggle.textContent=state.alerts?'Disable alerts':'Enable alerts';
   toggle.classList.toggle('settings-enable',!state.alerts);
   status.textContent=state.alerts?'Alerts on':'Alerts off';
+  $('#alert-overview').textContent=state.alerts?'On':'Off';
   status.toggleAttribute('data-enabled',state.alerts);
 }
 showAlertSettings();
@@ -660,11 +664,45 @@ function setSidebar(open){
  try{localStorage.setItem('daymark-sidebar',open?'open':'closed')}catch{}
 }
 setSidebar(preference('daymark-sidebar','open')==='open');
+const settingsPanel=$('#settings-panel');
+const settingsTitles={overview:'Settings',profile:'Profile',notifications:'Notifications',appearance:'Appearance',app:'App'};
+function showSettingsPage(page,focus){
+ const previous=settingsPanel.dataset.page;
+ settingsPanel.dataset.page=page;
+ for(const panel of settingsPanel.querySelectorAll('[data-settings-page]'))panel.hidden=panel.dataset.settingsPage!==page;
+ $('#settings-title').textContent=settingsTitles[page];
+ $('#settings-back').hidden=page==='overview';
+ settingsPanel.scrollTop=0;
+ if(focus){
+  const lastEntry=page==='overview'&&settingsPanel.querySelector('[data-open-settings="'+previous+'"]');
+  (lastEntry||$('#settings-title')).focus({preventScroll:true});
+ }
+}
+settingsPanel.addEventListener('click',event=>{
+ const entry=event.target.closest('[data-open-settings]');
+ if(entry)showSettingsPage(entry.dataset.openSettings,true);
+});
+$('#settings-back').onclick=()=>showSettingsPage('overview',true);
+settingsPanel.addEventListener('cancel',event=>{
+ if(settingsPanel.dataset.page==='overview')return;
+ event.preventDefault();
+ showSettingsPage('overview',true);
+});
 for(const button of document.querySelectorAll('[data-panel]'))button.onclick=()=>{
  $('#menu-panel').close();
- $('#email-address').textContent=state.user?.email||'';
- $('#profile-since').textContent=state.user?.created_at?'Joined '+new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric'}).format(new Date(state.user.created_at)):'';
- $('#'+button.dataset.panel).showModal();
+ const email=state.user?.email||'';
+ if(button.dataset.panel==='settings-panel'){
+  $('#settings-account').textContent=email;
+  $('#settings-avatar').textContent=email.charAt(0).toUpperCase()||'D';
+  $('#account-email').textContent=email;
+  $('#profile-since').textContent=state.user?.created_at?'Joined '+new Intl.DateTimeFormat('en-GB',{month:'long',year:'numeric'}).format(new Date(state.user.created_at)):'';
+  showSettingsPage('overview',false);
+  settingsPanel.showModal();
+  $('#settings-title').focus({preventScroll:true});
+ }else{
+  $('#email-address').textContent=email;
+  $('#email-panel').showModal();
+ }
 };
 for(const button of document.querySelectorAll('[data-mobile-view]'))button.onclick=()=>{
  $('#menu-panel').close();document.querySelector('[data-view="'+button.dataset.mobileView+'"]').click();
